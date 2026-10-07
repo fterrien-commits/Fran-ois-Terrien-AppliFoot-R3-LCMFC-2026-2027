@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix Suivi Équipe de Foot - Stats \u0026 Schémas Tactiques",
+  "description": "Application complète de suivi de saison de football : gestion de l\u0027effectif, feuilles de match, schémas tactiques interactifs avec incrustation des notes, et tableau récapitulatif annuel avec filtrage domicile/extérieur.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

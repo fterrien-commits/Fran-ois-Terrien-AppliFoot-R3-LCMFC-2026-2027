@@ -1,0 +1,257 @@
+{
+  "entities": {
+    "Joueur": {
+      "title": "Joueur",
+      "description": "Fiche détaillée d'un joueur de l'effectif sénior",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifiant unique du joueur",
+          "maxLength": 64
+        },
+        "nom": {
+          "type": "string",
+          "description": "Nom de famille du joueur",
+          "maxLength": 100
+        },
+        "prenom": {
+          "type": "string",
+          "description": "Prénom du joueur",
+          "maxLength": 100
+        },
+        "surnom": {
+          "type": "string",
+          "description": "Surnom ou alias optionnel",
+          "maxLength": 100
+        },
+        "poste": {
+          "type": "string",
+          "description": "Poste préférentiel du joueur",
+          "enum": ["G", "DC", "DD", "DG", "MDC", "MC", "MO", "AD", "AG", "BU"]
+        },
+        "numero": {
+          "type": "number",
+          "description": "Numéro de maillot du joueur"
+        },
+        "photo": {
+          "type": "string",
+          "description": "URL ou donnée d'image de profil du joueur",
+          "maxLength": 500000
+        },
+        "age": {
+          "type": "number",
+          "description": "Âge en années"
+        },
+        "taille": {
+          "type": "number",
+          "description": "Taille en centimètres"
+        },
+        "poids": {
+          "type": "number",
+          "description": "Poids en kilogrammes"
+        },
+        "piedFort": {
+          "type": "string",
+          "description": "Pied préférentiel",
+          "enum": ["Droitier", "Gaucher", "Ambidextre"]
+        },
+        "vma": {
+          "type": "number",
+          "description": "Vitesse Maximale Aérobie en km/h"
+        }
+      },
+      "required": ["id", "nom", "prenom", "poste", "numero"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "Rencontre de championnat ou coupe de l'équipe R3",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifiant unique de la rencontre",
+          "maxLength": 64
+        },
+        "adversaire": {
+          "type": "string",
+          "description": "Nom du club adverse",
+          "maxLength": 120
+        },
+        "date": {
+          "type": "string",
+          "description": "Date au format YYYY-MM-DD",
+          "maxLength": 20
+        },
+        "heure": {
+          "type": "string",
+          "description": "Heure au format HH:MM",
+          "maxLength": 10
+        },
+        "lieu": {
+          "type": "string",
+          "description": "Stade ou commune d'accueil",
+          "maxLength": 150
+        },
+        "meteo": {
+          "type": "string",
+          "description": "Conditions météorologiques",
+          "maxLength": 50
+        },
+        "domicileExterieur": {
+          "type": "string",
+          "description": "Lieu de réception",
+          "enum": ["domicile", "exterieur"]
+        },
+        "scoreEquipe": {
+          "type": "number",
+          "description": "Buts marqués par le LCMFC"
+        },
+        "scoreAdverse": {
+          "type": "number",
+          "description": "Buts marqués par l'adversaire"
+        },
+        "systemeEquipe": {
+          "type": "string",
+          "description": "Schéma tactique de départ du LCMFC",
+          "maxLength": 50
+        },
+        "systemeAdverse": {
+          "type": "string",
+          "description": "Schéma tactique observé chez l'adversaire",
+          "maxLength": 50
+        },
+        "competition": {
+          "type": "string",
+          "description": "Nom de la compétition (R3, Coupe de France, etc.)",
+          "maxLength": 100
+        },
+        "statut": {
+          "type": "string",
+          "description": "Statut de la rencontre",
+          "enum": ["termine", "a_venir"]
+        }
+      },
+      "required": ["id", "adversaire", "date", "heure", "lieu", "domicileExterieur", "scoreEquipe", "scoreAdverse", "systemeEquipe", "competition", "statut"]
+    },
+    "FeuilleMatchLigne": {
+      "title": "FeuilleMatchLigne",
+      "description": "Ligne de présence et performance individuelle d'un joueur pour un match",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifiant unique de la ligne",
+          "maxLength": 128
+        },
+        "matchId": {
+          "type": "string",
+          "description": "Identifiant du match associé",
+          "maxLength": 64
+        },
+        "joueurId": {
+          "type": "string",
+          "description": "Identifiant du joueur concerné",
+          "maxLength": 64
+        },
+        "titulaire": {
+          "type": "boolean",
+          "description": "Titularisation dans le 11 de départ"
+        },
+        "statut": {
+          "type": "string",
+          "description": "Statut de convocation / participation au match",
+          "maxLength": 50
+        },
+        "minutesJouees": {
+          "type": "number",
+          "description": "Temps de jeu effectif en minutes"
+        },
+        "buts": {
+          "type": "number",
+          "description": "Nombre de buts marqués"
+        },
+        "passesDecisives": {
+          "type": "number",
+          "description": "Nombre de passes décisives délivrées"
+        },
+        "cartonsJaunes": {
+          "type": "number",
+          "description": "Cartons jaunes reçus"
+        },
+        "cartonsRouges": {
+          "type": "number",
+          "description": "Cartons rouges reçus"
+        },
+        "note": {
+          "type": "number",
+          "description": "Note d'évaluation sur 10"
+        }
+      },
+      "required": ["id", "matchId", "joueurId", "titulaire", "minutesJouees", "buts", "passesDecisives", "cartonsJaunes", "cartonsRouges"]
+    },
+    "CompositionMatch": {
+      "title": "CompositionMatch",
+      "description": "Disposition et coordonnées tactiques sur le terrain pour un match",
+      "type": "object",
+      "properties": {
+        "matchId": {
+          "type": "string",
+          "description": "Identifiant du match",
+          "maxLength": 64
+        },
+        "systeme": {
+          "type": "string",
+          "description": "Système de jeu tactique",
+          "maxLength": 50
+        }
+      },
+      "required": ["matchId", "systeme"]
+    },
+    "ClubConfig": {
+      "title": "ClubConfig",
+      "description": "Configuration globale du club (ex: logo officiel, saison active)",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifiant de configuration",
+          "maxLength": 64
+        },
+        "clubLogo": {
+          "type": "string",
+          "description": "Logo du club en SVG/base64 ou URL",
+          "maxLength": 500000
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Horodatage de dernière mise à jour",
+          "maxLength": 40
+        }
+      },
+      "required": ["id"]
+    }
+  },
+  "firestore": {
+    "/joueurs/{joueurId}": {
+      "schema": "Joueur",
+      "description": "Effectif des joueurs du club"
+    },
+    "/matchs/{matchId}": {
+      "schema": "Match",
+      "description": "Calendrier et résultats des matchs"
+    },
+    "/feuillesMatch/{feuilleId}": {
+      "schema": "FeuilleMatchLigne",
+      "description": "Données statistiques et présences des joueurs par match"
+    },
+    "/compositions/{matchId}": {
+      "schema": "CompositionMatch",
+      "description": "Schémas tactiques et positions des joueurs par match"
+    },
+    "/clubConfig/{configId}": {
+      "schema": "ClubConfig",
+      "description": "Paramètres et personnalisations visuelles du club"
+    }
+  }
+}

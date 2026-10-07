@@ -1,0 +1,105 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Health check / connection test document
+    match /test/{docId} {
+      allow get: if true;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    function isValidJoueur(data) {
+      return data.keys().hasAll(['id', 'nom', 'prenom', 'poste', 'numero']) &&
+             data.id is string && data.id.size() <= 64 &&
+             data.nom is string && data.nom.size() <= 100 &&
+             data.prenom is string && data.prenom.size() <= 100 &&
+             data.poste is string &&
+             data.numero is number;
+    }
+
+    function isValidMatch(data) {
+      return data.keys().hasAll(['id', 'adversaire', 'date', 'heure', 'lieu', 'domicileExterieur', 'scoreEquipe', 'scoreAdverse', 'systemeEquipe', 'competition', 'statut']) &&
+             data.id is string && data.id.size() <= 64 &&
+             data.adversaire is string && data.adversaire.size() <= 120 &&
+             data.date is string && data.date.size() <= 20 &&
+             data.scoreEquipe is number &&
+             data.scoreAdverse is number;
+    }
+
+    function isValidFeuille(data) {
+      return data.keys().hasAll(['id', 'matchId', 'joueurId', 'titulaire', 'minutesJouees', 'buts', 'passesDecisives', 'cartonsJaunes', 'cartonsRouges']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.matchId is string && data.matchId.size() <= 64 &&
+             data.joueurId is string && data.joueurId.size() <= 64 &&
+             data.titulaire is bool &&
+             data.minutesJouees is number;
+    }
+
+    function isValidComposition(data) {
+      return data.keys().hasAll(['matchId', 'systeme']) &&
+             data.matchId is string && data.matchId.size() <= 64 &&
+             data.systeme is string && data.systeme.size() <= 50;
+    }
+
+    function isValidClubConfig(data) {
+      return data.keys().hasAll(['id']) &&
+             data.id is string && data.id.size() <= 64;
+    }
+
+    // Effectif Joueurs
+    match /joueurs/{joueurId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(joueurId) && isValidJoueur(incoming());
+      allow update: if isSignedIn() && isValidId(joueurId) && isValidJoueur(incoming());
+      allow delete: if isSignedIn() && isValidId(joueurId);
+    }
+
+    // Rencontres et Matchs
+    match /matchs/{matchId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(matchId) && isValidMatch(incoming());
+      allow update: if isSignedIn() && isValidId(matchId) && isValidMatch(incoming());
+      allow delete: if isSignedIn() && isValidId(matchId);
+    }
+
+    // Feuilles de match
+    match /feuillesMatch/{feuilleId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(feuilleId) && isValidFeuille(incoming());
+      allow update: if isSignedIn() && isValidId(feuilleId) && isValidFeuille(incoming());
+      allow delete: if isSignedIn() && isValidId(feuilleId);
+    }
+
+    // Compositions tactiques
+    match /compositions/{compMatchId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(compMatchId) && isValidComposition(incoming());
+      allow update: if isSignedIn() && isValidId(compMatchId) && isValidComposition(incoming());
+      allow delete: if isSignedIn() && isValidId(compMatchId);
+    }
+
+    // Configuration club & Logo
+    match /clubConfig/{configId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(configId) && isValidClubConfig(incoming());
+      allow update: if isSignedIn() && isValidId(configId) && isValidClubConfig(incoming());
+      allow delete: if isSignedIn() && isValidId(configId);
+    }
+  }
+}

@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+/* =========================================================
+   THÈME BLANC / ROUGE / NOIR (Palette Sportive Haute Lisibilité)
+   ========================================================= */
+
+body.theme-wrb,
+.theme-wrb {
+  --bg-app: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-subtle: #f1f5f9;
+  --border-card: #e2e8f0;
+  --text-main: #09090b;
+  --text-muted: #52525b;
+  --accent-red: #dc2626;
+  --accent-black: #09090b;
+  background-color: #f8fafc !important;
+  color: #09090b !important;
+}
+
+/* Backgrounds mapping to crisp white and light slate */
+.theme-wrb .bg-slate-950 {
+  background-color: #f4f4f5 !important;
+}
+
+.theme-wrb .bg-slate-900 {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+}
+
+.theme-wrb .bg-slate-900\/90,
+.theme-wrb .bg-slate-900\/80,
+.theme-wrb .bg-slate-900\/60,
+.theme-wrb .bg-slate-950\/90,
+.theme-wrb .bg-slate-950\/70,
+.theme-wrb .bg-slate-950\/60,
+.theme-wrb .bg-slate-950\/40 {
+  background-color: rgba(255, 255, 255, 0.97) !important;
+}
+
+.theme-wrb .bg-slate-800 {
+  background-color: #f1f5f9 !important;
+}
+
+.theme-wrb .bg-slate-800\/80,
+.theme-wrb .bg-slate-800\/60 {
+  background-color: #e2e8f0 !important;
+}
+
+.theme-wrb .hover\:bg-slate-800:hover,
+.theme-wrb .hover\:bg-slate-700:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Borders */
+.theme-wrb .border-slate-800,
+.theme-wrb .border-slate-800\/80,
+.theme-wrb .border-slate-800\/60 {
+  border-color: #e2e8f0 !important;
+}
+
+.theme-wrb .border-slate-700,
+.theme-wrb .border-slate-700\/80 {
+  border-color: #cbd5e1 !important;
+}
+
+.theme-wrb .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
+.theme-wrb .divide-slate-800\/60 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e2e8f0 !important;
+}
+
+/* Typography contrast */
+.theme-wrb .text-white {
+  color: #09090b !important;
+}
+
+.theme-wrb .text-slate-100 {
+  color: #09090b !important;
+}
+
+.theme-wrb .text-slate-200 {
+  color: #18181b !important;
+}
+
+.theme-wrb .text-slate-300 {
+  color: #27272a !important;
+}
+
+.theme-wrb .text-slate-400 {
+  color: #52525b !important;
+}
+
+.theme-wrb .text-slate-500 {
+  color: #71717a !important;
+}
+
+/* Red accents conversion from emerald */
+.theme-wrb .bg-emerald-600 {
+  background-color: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+.theme-wrb .hover\:bg-emerald-500:hover {
+  background-color: #b91c1c !important;
+}
+
+.theme-wrb .text-emerald-400,
+.theme-wrb .text-emerald-300 {
+  color: #dc2626 !important;
+}
+
+.theme-wrb .border-emerald-500 {
+  border-color: #dc2626 !important;
+}
+
+.theme-wrb .border-emerald-500\/50,
+.theme-wrb .border-emerald-500\/40,
+.theme-wrb .border-emerald-500\/30,
+.theme-wrb .border-emerald-500\/20 {
+  border-color: #fca5a5 !important;
+}
+
+.theme-wrb .bg-emerald-500\/20,
+.theme-wrb .bg-emerald-500\/15,
+.theme-wrb .bg-emerald-500\/10 {
+  background-color: #fee2e2 !important;
+  color: #991b1b !important;
+}
+
+.theme-wrb .hover\:text-emerald-300:hover,
+.theme-wrb .hover\:text-emerald-400:hover {
+  color: #b91c1c !important;
+}
+
+/* Form Inputs */
+.theme-wrb input:not([type="checkbox"]):not([type="radio"]),
+.theme-wrb select,
+.theme-wrb textarea {
+  background-color: #ffffff !important;
+  color: #09090b !important;
+  border-color: #cbd5e1 !important;
+}
+
+.theme-wrb input:focus,
+.theme-wrb select:focus,
+.theme-wrb textarea:focus {
+  border-color: #dc2626 !important;
+  outline-color: #dc2626 !important;
+}
+
+/* Ensure colored buttons retain white text */
+.theme-wrb button.bg-emerald-600,
+.theme-wrb .bg-emerald-600 *,
+.theme-wrb button.bg-red-600,
+.theme-wrb .bg-red-600 *,
+.theme-wrb button.bg-rose-600,
+.theme-wrb .bg-rose-600 *,
+.theme-wrb .btn-white-text,
+.theme-wrb .btn-white-text * {
+  color: #ffffff !important;
+}
+
+/* Pitch Field Overrides - preserve realism on grass */
+.theme-wrb .tactical-pitch-field,
+.theme-wrb .tactical-pitch-field .text-white {
+  color: #ffffff !important;
+}
+
+.theme-wrb .tactical-pitch-field .bg-slate-900,
+.theme-wrb .tactical-pitch-field .bg-slate-950 {
+  background-color: #09090b !important;
+  color: #ffffff !important;
+}
+
+.theme-wrb .tactical-pitch-field .text-slate-400 {
+  color: #cbd5e1 !important;
+}
+
+/* Modal overlay backdrop */
+.theme-wrb .bg-black\/80 {
+  background-color: rgba(9, 9, 11, 0.72) !important;
+}
