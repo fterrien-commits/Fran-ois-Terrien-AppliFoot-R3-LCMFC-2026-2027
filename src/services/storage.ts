@@ -17,47 +17,19 @@ export const StorageService = {
         return INITIAL_JOUEURS;
       }
       const parsed: Joueur[] = JSON.parse(data);
-      // Seamlessly backfill profile attributes (age, taille, poids, piedFort, surnom, vma) if missing on initial roster
-      const initialMap = new Map(INITIAL_JOUEURS.map((j) => [j.id, j]));
-      let hasUpdates = false;
-      const upgraded = parsed.map((j) => {
-        const init = initialMap.get(j.id);
-        if (init) {
-          const merged: Joueur = {
-            ...init,
-            ...j,
-            age: j.age ?? init.age,
-            taille: j.taille ?? init.taille,
-            poids: j.poids ?? init.poids,
-            piedFort: j.piedFort ?? init.piedFort,
-            surnom: j.surnom ?? init.surnom,
-            vma: j.vma ?? init.vma,
-          };
-          if (
-            j.age !== merged.age ||
-            j.taille !== merged.taille ||
-            j.poids !== merged.poids ||
-            j.piedFort !== merged.piedFort ||
-            j.surnom !== merged.surnom ||
-            j.vma !== merged.vma
-          ) {
-            hasUpdates = true;
-          }
-          return merged;
-        }
-        return j;
-      });
-      if (hasUpdates) {
-        this.saveJoueurs(upgraded);
-      }
-      return upgraded;
-    } catch {
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_JOUEURS;
+    } catch (e) {
+      console.warn('Erreur lecture joueurs localStorage:', e);
       return INITIAL_JOUEURS;
     }
   },
 
   saveJoueurs(joueurs: Joueur[]): void {
-    localStorage.setItem(STORAGE_KEYS.JOUEURS, JSON.stringify(joueurs));
+    try {
+      localStorage.setItem(STORAGE_KEYS.JOUEURS, JSON.stringify(joueurs));
+    } catch (e) {
+      console.error('Erreur écriture joueurs localStorage (quota probable):', e);
+    }
   },
 
   getMatchs(): Match[] {
@@ -67,14 +39,20 @@ export const StorageService = {
         this.saveMatchs(INITIAL_MATCHS);
         return INITIAL_MATCHS;
       }
-      return JSON.parse(data);
-    } catch {
+      const parsed: Match[] = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed : INITIAL_MATCHS;
+    } catch (e) {
+      console.warn('Erreur lecture matchs localStorage:', e);
       return INITIAL_MATCHS;
     }
   },
 
   saveMatchs(matchs: Match[]): void {
-    localStorage.setItem(STORAGE_KEYS.MATCHS, JSON.stringify(matchs));
+    try {
+      localStorage.setItem(STORAGE_KEYS.MATCHS, JSON.stringify(matchs));
+    } catch (e) {
+      console.error('Erreur écriture matchs localStorage (quota probable):', e);
+    }
   },
 
   getFeuillesMatch(): FeuilleMatchLigne[] {
@@ -85,26 +63,19 @@ export const StorageService = {
         return INITIAL_FEUILLES_MATCH;
       }
       const parsed: FeuilleMatchLigne[] = JSON.parse(data);
-      // Sécurité & Restauration automatique : si des matchs initiaux sont manquants
-      // (par exemple suite à un écrasement antérieur d'un match unique), on conserve les données existantes
-      // et on réintègre les feuilles des autres matchs afin qu'aucun match ne soit écrasé ou perdu
-      const existingMatchIds = new Set(parsed.map((f) => f.matchId));
-      const missingInitialRows = INITIAL_FEUILLES_MATCH.filter(
-        (f) => !existingMatchIds.has(f.matchId)
-      );
-      if (missingInitialRows.length > 0) {
-        const merged = [...parsed, ...missingInitialRows];
-        this.saveFeuillesMatch(merged);
-        return merged;
-      }
-      return parsed;
-    } catch {
+      return Array.isArray(parsed) ? parsed : INITIAL_FEUILLES_MATCH;
+    } catch (e) {
+      console.warn('Erreur lecture feuillesMatch localStorage:', e);
       return INITIAL_FEUILLES_MATCH;
     }
   },
 
   saveFeuillesMatch(feuilles: FeuilleMatchLigne[]): void {
-    localStorage.setItem(STORAGE_KEYS.FEUILLES, JSON.stringify(feuilles));
+    try {
+      localStorage.setItem(STORAGE_KEYS.FEUILLES, JSON.stringify(feuilles));
+    } catch (e) {
+      console.error('Erreur écriture feuillesMatch localStorage (quota probable):', e);
+    }
   },
 
   getCompositions(): Record<string, CompositionMatch> {
@@ -115,26 +86,19 @@ export const StorageService = {
         return INITIAL_COMPOSITIONS;
       }
       const parsed: Record<string, CompositionMatch> = JSON.parse(data);
-      let hasMissing = false;
-      const merged = { ...INITIAL_COMPOSITIONS, ...parsed };
-      for (const k of Object.keys(INITIAL_COMPOSITIONS)) {
-        if (!parsed[k]) {
-          hasMissing = true;
-          break;
-        }
-      }
-      if (hasMissing) {
-        this.saveCompositions(merged);
-        return merged;
-      }
-      return parsed;
-    } catch {
+      return parsed && typeof parsed === 'object' ? parsed : INITIAL_COMPOSITIONS;
+    } catch (e) {
+      console.warn('Erreur lecture compositions localStorage:', e);
       return INITIAL_COMPOSITIONS;
     }
   },
 
   saveCompositions(compositions: Record<string, CompositionMatch>): void {
-    localStorage.setItem(STORAGE_KEYS.COMPOSITIONS, JSON.stringify(compositions));
+    try {
+      localStorage.setItem(STORAGE_KEYS.COMPOSITIONS, JSON.stringify(compositions));
+    } catch (e) {
+      console.error('Erreur écriture compositions localStorage (quota probable):', e);
+    }
   },
 
   resetAll(): void {

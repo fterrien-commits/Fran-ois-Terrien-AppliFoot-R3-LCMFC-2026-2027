@@ -112,7 +112,7 @@ export default function App() {
       setCurrentUser(user);
     });
 
-    // Attempt initial sync from Cloud Firestore if available
+    // Attempt initial sync from Cloud Firestore with smart non-destructive merging
     const initCloudData = async () => {
       try {
         const [cloudJoueurs, cloudMatchs, cloudFeuilles, cloudComps, cloudConfig] = await Promise.allSettled([
@@ -123,22 +123,91 @@ export default function App() {
           FirebaseDataService.getClubConfig(),
         ]);
 
-        if (cloudJoueurs.status === 'fulfilled' && cloudJoueurs.value && cloudJoueurs.value.length > 0) {
-          setJoueurs(cloudJoueurs.value);
-          StorageService.saveJoueurs(cloudJoueurs.value);
+        // 1. Smart merge Joueurs: Never wipe local players
+        if (cloudJoueurs.status === 'fulfilled' && cloudJoueurs.value) {
+          const localJ = StorageService.getJoueurs();
+          const mergedJMap = new Map<string, Joueur>();
+          cloudJoueurs.value.forEach((j) => mergedJMap.set(j.id, j));
+          let needPushJ = false;
+          localJ.forEach((j) => {
+            if (!mergedJMap.has(j.id)) {
+              needPushJ = true;
+              mergedJMap.set(j.id, j);
+            } else {
+              mergedJMap.set(j.id, { ...mergedJMap.get(j.id)!, ...j });
+            }
+          });
+          const mergedJ = Array.from(mergedJMap.values());
+          if (mergedJ.length > 0) {
+            setJoueurs(mergedJ);
+            StorageService.saveJoueurs(mergedJ);
+            if (needPushJ) {
+              FirebaseDataService.batchSaveJoueurs(mergedJ).catch(console.error);
+            }
+          }
         }
-        if (cloudMatchs.status === 'fulfilled' && cloudMatchs.value && cloudMatchs.value.length > 0) {
-          setMatchs(cloudMatchs.value);
-          StorageService.saveMatchs(cloudMatchs.value);
+
+        // 2. Smart merge Matchs: NEVER overwrite or drop matches!
+        if (cloudMatchs.status === 'fulfilled' && cloudMatchs.value) {
+          const localM = StorageService.getMatchs();
+          const mergedMMap = new Map<string, Match>();
+          cloudMatchs.value.forEach((m) => mergedMMap.set(m.id, m));
+          let needPushM = false;
+          localM.forEach((m) => {
+            if (!mergedMMap.has(m.id)) {
+              needPushM = true;
+              mergedMMap.set(m.id, m);
+            } else {
+              mergedMMap.set(m.id, { ...mergedMMap.get(m.id)!, ...m });
+            }
+          });
+          const mergedM = Array.from(mergedMMap.values());
+          if (mergedM.length > 0) {
+            setMatchs(mergedM);
+            StorageService.saveMatchs(mergedM);
+            if (needPushM) {
+              FirebaseDataService.batchSaveMatchs(mergedM).catch(console.error);
+            }
+          }
         }
-        if (cloudFeuilles.status === 'fulfilled' && cloudFeuilles.value && cloudFeuilles.value.length > 0) {
-          setFeuillesMatch(cloudFeuilles.value);
-          StorageService.saveFeuillesMatch(cloudFeuilles.value);
+
+        // 3. Smart merge Feuilles de Match
+        if (cloudFeuilles.status === 'fulfilled' && cloudFeuilles.value) {
+          const localF = StorageService.getFeuillesMatch();
+          const mergedFMap = new Map<string, FeuilleMatchLigne>();
+          cloudFeuilles.value.forEach((f) => mergedFMap.set(f.id, f));
+          let needPushF = false;
+          localF.forEach((f) => {
+            if (!mergedFMap.has(f.id)) {
+              needPushF = true;
+              mergedFMap.set(f.id, f);
+            } else {
+              mergedFMap.set(f.id, { ...mergedFMap.get(f.id)!, ...f });
+            }
+          });
+          const mergedF = Array.from(mergedFMap.values());
+          if (mergedF.length > 0) {
+            setFeuillesMatch(mergedF);
+            StorageService.saveFeuillesMatch(mergedF);
+            if (needPushF) {
+              FirebaseDataService.saveFeuillesMatch(mergedF).catch(console.error);
+            }
+          }
         }
-        if (cloudComps.status === 'fulfilled' && cloudComps.value && Object.keys(cloudComps.value).length > 0) {
-          setCompositions(cloudComps.value);
-          StorageService.saveCompositions(cloudComps.value);
+
+        // 4. Smart merge Compositions
+        if (cloudComps.status === 'fulfilled' && cloudComps.value) {
+          const localC = StorageService.getCompositions();
+          const mergedC = { ...cloudComps.value, ...localC };
+          if (Object.keys(mergedC).length > 0) {
+            setCompositions(mergedC);
+            StorageService.saveCompositions(mergedC);
+            if (Object.keys(localC).some((k) => !cloudComps.value[k])) {
+              FirebaseDataService.batchSaveCompositions(mergedC).catch(console.error);
+            }
+          }
         }
+
         if (cloudConfig.status === 'fulfilled' && cloudConfig.value?.clubLogo) {
           setClubLogo(cloudConfig.value.clubLogo);
           localStorage.setItem('lcmfc_club_logo', cloudConfig.value.clubLogo);
@@ -146,7 +215,7 @@ export default function App() {
 
         setLastSyncTime(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
       } catch (err) {
-        console.warn('Initial Firestore sync silent check:', err);
+        console.warn('Initial Firestore sync check:', err);
       }
     };
 
@@ -157,29 +226,23 @@ export default function App() {
     };
   }, []);
 
-  // Sync to LocalStorage & auto-replicate to Firestore when authenticated
+  // Sync to LocalStorage & auto-replicate to Firestore continuously
   const handleUpdateJoueurs = (newJoueurs: Joueur[]) => {
     setJoueurs(newJoueurs);
     StorageService.saveJoueurs(newJoueurs);
-    if (auth.currentUser) {
-      FirebaseDataService.batchSaveJoueurs(newJoueurs).catch(console.error);
-    }
+    FirebaseDataService.batchSaveJoueurs(newJoueurs).catch(console.error);
   };
 
   const handleUpdateMatchs = (newMatchs: Match[]) => {
     setMatchs(newMatchs);
     StorageService.saveMatchs(newMatchs);
-    if (auth.currentUser) {
-      FirebaseDataService.batchSaveMatchs(newMatchs).catch(console.error);
-    }
+    FirebaseDataService.batchSaveMatchs(newMatchs).catch(console.error);
   };
 
   const handleUpdateFeuillesMatch = (newFeuilles: FeuilleMatchLigne[]) => {
     setFeuillesMatch(newFeuilles);
     StorageService.saveFeuillesMatch(newFeuilles);
-    if (auth.currentUser) {
-      FirebaseDataService.saveFeuillesMatch(newFeuilles).catch(console.error);
-    }
+    FirebaseDataService.saveFeuillesMatch(newFeuilles).catch(console.error);
   };
 
   // Met à jour les feuilles d'un match spécifique en préservant systématiquement TOUS les autres matchs
@@ -188,9 +251,7 @@ export default function App() {
       const otherFeuilles = prevFeuilles.filter((f) => f.matchId !== matchId);
       const merged = [...otherFeuilles, ...matchFeuilles];
       StorageService.saveFeuillesMatch(merged);
-      if (auth.currentUser) {
-        FirebaseDataService.saveFeuillesMatch(merged).catch(console.error);
-      }
+      FirebaseDataService.saveFeuillesMatch(merged).catch(console.error);
       return merged;
     });
   };
@@ -198,9 +259,7 @@ export default function App() {
   const handleUpdateCompositions = (newCompositions: Record<string, CompositionMatch>) => {
     setCompositions(newCompositions);
     StorageService.saveCompositions(newCompositions);
-    if (auth.currentUser) {
-      FirebaseDataService.batchSaveCompositions(newCompositions).catch(console.error);
-    }
+    FirebaseDataService.batchSaveCompositions(newCompositions).catch(console.error);
   };
 
   // Push all local data to Firebase Cloud
@@ -291,6 +350,7 @@ export default function App() {
   const handleDeleteJoueur = (joueurId: string) => {
     handleUpdateJoueurs(joueurs.filter((j) => j.id !== joueurId));
     handleUpdateFeuillesMatch(feuillesMatch.filter((f) => f.joueurId !== joueurId));
+    FirebaseDataService.deleteJoueur(joueurId).catch(console.error);
     // Clean up composition references
     const newCompositions = { ...compositions };
     Object.keys(newCompositions).forEach((mId) => {
@@ -312,6 +372,7 @@ export default function App() {
     const idsSet = new Set(joueurIds);
     handleUpdateJoueurs(joueurs.filter((j) => !idsSet.has(j.id)));
     handleUpdateFeuillesMatch(feuillesMatch.filter((f) => !idsSet.has(f.joueurId)));
+    joueurIds.forEach((id) => FirebaseDataService.deleteJoueur(id).catch(console.error));
     const newCompositions = { ...compositions };
     Object.keys(newCompositions).forEach((mId) => {
       newCompositions[mId] = {
@@ -415,9 +476,7 @@ export default function App() {
     setMatchs((prevMatchs) => {
       const updatedMatchs = prevMatchs.map((m) => (m.id === validatedMatch.id ? validatedMatch : m));
       StorageService.saveMatchs(updatedMatchs);
-      if (auth.currentUser) {
-        FirebaseDataService.batchSaveMatchs(updatedMatchs).catch(console.error);
-      }
+      FirebaseDataService.saveMatch(validatedMatch).catch(console.error);
       return updatedMatchs;
     });
     setSelectedMatch(validatedMatch);
@@ -429,9 +488,7 @@ export default function App() {
         [newComp.matchId]: newComp,
       };
       StorageService.saveCompositions(updatedComps);
-      if (auth.currentUser) {
-        FirebaseDataService.batchSaveCompositions(updatedComps).catch(console.error);
-      }
+      FirebaseDataService.saveComposition(newComp).catch(console.error);
       return updatedComps;
     });
 
@@ -440,9 +497,7 @@ export default function App() {
       const otherFeuilles = prevFeuilles.filter((f) => f.matchId !== validatedMatch.id);
       const updatedFeuilles = [...otherFeuilles, ...newFeuilles];
       StorageService.saveFeuillesMatch(updatedFeuilles);
-      if (auth.currentUser) {
-        FirebaseDataService.saveFeuillesMatch(updatedFeuilles).catch(console.error);
-      }
+      FirebaseDataService.saveFeuillesMatch(newFeuilles).catch(console.error);
       return updatedFeuilles;
     });
 
@@ -457,6 +512,7 @@ export default function App() {
   const handleDeleteMatch = (matchId: string) => {
     handleUpdateMatchs(matchs.filter((m) => m.id !== matchId));
     handleUpdateFeuillesMatch(feuillesMatch.filter((f) => f.matchId !== matchId));
+    FirebaseDataService.deleteMatch(matchId).catch(console.error);
     const newCompositions = { ...compositions };
     delete newCompositions[matchId];
     handleUpdateCompositions(newCompositions);
@@ -470,6 +526,7 @@ export default function App() {
     const idsSet = new Set(matchIds);
     handleUpdateMatchs(matchs.filter((m) => !idsSet.has(m.id)));
     handleUpdateFeuillesMatch(feuillesMatch.filter((f) => !idsSet.has(f.matchId)));
+    matchIds.forEach((id) => FirebaseDataService.deleteMatch(id).catch(console.error));
     const newCompositions = { ...compositions };
     matchIds.forEach((id) => delete newCompositions[id]);
     handleUpdateCompositions(newCompositions);

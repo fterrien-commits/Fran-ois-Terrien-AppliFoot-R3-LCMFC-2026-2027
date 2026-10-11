@@ -65,41 +65,41 @@ service cloud.firestore {
     // Effectif Joueurs
     match /joueurs/{joueurId} {
       allow get, list: if true;
-      allow create: if isSignedIn() && isValidId(joueurId) && isValidJoueur(incoming());
-      allow update: if isSignedIn() && isValidId(joueurId) && isValidJoueur(incoming());
-      allow delete: if isSignedIn() && isValidId(joueurId);
+      allow create: if isValidId(joueurId) && isValidJoueur(incoming());
+      allow update: if isValidId(joueurId) && isValidJoueur(incoming());
+      allow delete: if isValidId(joueurId);
     }
 
     // Rencontres et Matchs
     match /matchs/{matchId} {
       allow get, list: if true;
-      allow create: if isSignedIn() && isValidId(matchId) && isValidMatch(incoming());
-      allow update: if isSignedIn() && isValidId(matchId) && isValidMatch(incoming());
-      allow delete: if isSignedIn() && isValidId(matchId);
+      allow create: if isValidId(matchId) && isValidMatch(incoming());
+      allow update: if isValidId(matchId) && isValidMatch(incoming());
+      allow delete: if isValidId(matchId);
     }
 
     // Feuilles de match
     match /feuillesMatch/{feuilleId} {
       allow get, list: if true;
-      allow create: if isSignedIn() && isValidId(feuilleId) && isValidFeuille(incoming());
-      allow update: if isSignedIn() && isValidId(feuilleId) && isValidFeuille(incoming());
-      allow delete: if isSignedIn() && isValidId(feuilleId);
+      allow create: if isValidId(feuilleId) && isValidFeuille(incoming());
+      allow update: if isValidId(feuilleId) && isValidFeuille(incoming());
+      allow delete: if isValidId(feuilleId);
     }
 
     // Compositions tactiques
     match /compositions/{compMatchId} {
       allow get, list: if true;
-      allow create: if isSignedIn() && isValidId(compMatchId) && isValidComposition(incoming());
-      allow update: if isSignedIn() && isValidId(compMatchId) && isValidComposition(incoming());
-      allow delete: if isSignedIn() && isValidId(compMatchId);
+      allow create: if isValidId(compMatchId) && isValidComposition(incoming());
+      allow update: if isValidId(compMatchId) && isValidComposition(incoming());
+      allow delete: if isValidId(compMatchId);
     }
 
     // Configuration club & Logo
     match /clubConfig/{configId} {
       allow get, list: if true;
-      allow create: if isSignedIn() && isValidId(configId) && isValidClubConfig(incoming());
-      allow update: if isSignedIn() && isValidId(configId) && isValidClubConfig(incoming());
-      allow delete: if isSignedIn() && isValidId(configId);
+      allow create: if isValidId(configId) && isValidClubConfig(incoming());
+      allow update: if isValidId(configId) && isValidClubConfig(incoming());
+      allow delete: if isValidId(configId);
     }
   }
 }

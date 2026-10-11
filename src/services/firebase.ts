@@ -185,6 +185,19 @@ export const FirebaseDataService = {
     const path = `matchs/${matchId}`;
     try {
       await deleteDoc(doc(db, 'matchs', matchId));
+      await deleteDoc(doc(db, 'compositions', matchId)).catch(() => {});
+      // Delete associated feuilles for this match
+      try {
+        const feuillesSnap = await getDocs(collection(db, 'feuillesMatch'));
+        const toDelete = feuillesSnap.docs.filter((d) => d.data()?.matchId === matchId);
+        if (toDelete.length > 0) {
+          const batch = writeBatch(db);
+          toDelete.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+        }
+      } catch (e) {
+        console.warn('Erreur suppression feuilles orphelines Firestore:', e);
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, path);
     }
@@ -193,11 +206,15 @@ export const FirebaseDataService = {
   async batchSaveMatchs(matchs: Match[]): Promise<void> {
     const path = 'matchs';
     try {
-      const batch = writeBatch(db);
-      matchs.forEach((m) => {
-        batch.set(doc(db, 'matchs', m.id), sanitizeForFirestore(m));
-      });
-      await batch.commit();
+      const CHUNK_SIZE = 400;
+      for (let i = 0; i < matchs.length; i += CHUNK_SIZE) {
+        const chunk = matchs.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach((m) => {
+          batch.set(doc(db, 'matchs', m.id), sanitizeForFirestore(m));
+        });
+        await batch.commit();
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, path);
     }
@@ -217,11 +234,15 @@ export const FirebaseDataService = {
   async saveFeuillesMatch(feuilles: FeuilleMatchLigne[]): Promise<void> {
     const path = 'feuillesMatch';
     try {
-      const batch = writeBatch(db);
-      feuilles.forEach((f) => {
-        batch.set(doc(db, 'feuillesMatch', f.id), sanitizeForFirestore(f));
-      });
-      await batch.commit();
+      const CHUNK_SIZE = 400;
+      for (let i = 0; i < feuilles.length; i += CHUNK_SIZE) {
+        const chunk = feuilles.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach((f) => {
+          batch.set(doc(db, 'feuillesMatch', f.id), sanitizeForFirestore(f));
+        });
+        await batch.commit();
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, path);
     }
