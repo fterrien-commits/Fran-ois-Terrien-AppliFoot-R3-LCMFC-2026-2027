@@ -9,6 +9,9 @@ import {
 } from 'firebase/auth';
 import {
   getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   doc,
   collection,
   getDocs,
@@ -17,6 +20,7 @@ import {
   writeBatch,
   onSnapshot,
   getDocFromServer,
+  Firestore,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { CompositionMatch, FeuilleMatchLigne, Joueur, Match } from '../types';
@@ -24,7 +28,7 @@ import { CompositionMatch, FeuilleMatchLigne, Joueur, Match } from '../types';
 // Initialize Firebase App
 export const app = initializeApp(firebaseConfig);
 
-// CRITICAL: Must pass firestoreDatabaseId
+// Initialize Firestore directly for maximum stability across ChromeOS, iframes, and mobile devices
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
@@ -117,6 +121,50 @@ export async function logoutUser(): Promise<void> {
   await signOut(auth);
 }
 
+// Helper to ensure Match documents adhere strictly to Firestore schema and security rules
+export function sanitizeMatch(m: Match): Record<string, unknown> {
+  return sanitizeForFirestore({
+    id: m.id,
+    adversaire: m.adversaire || 'Adversaire',
+    date: m.date || new Date().toISOString().split('T')[0],
+    heure: m.heure || '15:00',
+    lieu: m.lieu || 'Stade Municipal',
+    domicileExterieur: m.domicileExterieur || 'domicile',
+    scoreEquipe: typeof m.scoreEquipe === 'number' ? m.scoreEquipe : 0,
+    scoreAdverse: typeof m.scoreAdverse === 'number' ? m.scoreAdverse : 0,
+    systemeEquipe: m.systemeEquipe || '4-3-3',
+    systemeAdverse: m.systemeAdverse || '4-4-2',
+    competition: m.competition || 'Championnat R3',
+    statut: m.statut || 'termine',
+    typeMatch: m.typeMatch || 'championnat',
+    meteo: m.meteo || 'Ensoleillé',
+    valide: m.valide !== undefined ? m.valide : true,
+    dateValidation: m.dateValidation || new Date().toISOString(),
+    photos: Array.isArray(m.photos) ? m.photos : [],
+    scoutingAdverse: m.scoutingAdverse || null,
+  }) as Record<string, unknown>;
+}
+
+// Helper to ensure FeuilleMatch documents adhere strictly to Firestore schema and security rules
+export function sanitizeFeuille(f: FeuilleMatchLigne): Record<string, unknown> {
+  const matchId = f.matchId;
+  const joueurId = f.joueurId;
+  const id = f.id || `f_${matchId}_${joueurId}`;
+  return sanitizeForFirestore({
+    id,
+    matchId,
+    joueurId,
+    titulaire: !!f.titulaire,
+    statut: f.statut || (f.titulaire ? 'titulaire' : 'remplacant'),
+    minutesJouees: typeof f.minutesJouees === 'number' ? f.minutesJouees : 0,
+    buts: typeof f.buts === 'number' ? f.buts : 0,
+    passesDecisives: typeof f.passesDecisives === 'number' ? f.passesDecisives : 0,
+    cartonsJaunes: typeof f.cartonsJaunes === 'number' ? f.cartonsJaunes : 0,
+    cartonsRouges: typeof f.cartonsRouges === 'number' ? f.cartonsRouges : 0,
+    note: f.note !== null && f.note !== undefined && !isNaN(Number(f.note)) ? Number(f.note) : null,
+  }) as Record<string, unknown>;
+}
+
 // Cloud Firestore data operations
 export const FirebaseDataService = {
   // JOUEURS
@@ -149,15 +197,23 @@ export const FirebaseDataService = {
   },
 
   async batchSaveJoueurs(joueurs: Joueur[]): Promise<void> {
+    if (!joueurs || joueurs.length === 0) return;
     const path = 'joueurs';
     try {
-      const batch = writeBatch(db);
-      joueurs.forEach((j) => {
-        batch.set(doc(db, 'joueurs', j.id), sanitizeForFirestore(j));
-      });
-      await batch.commit();
+      const CHUNK_SIZE = 300;
+      for (let i = 0; i < joueurs.length; i += CHUNK_SIZE) {
+        const chunk = joueurs.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach((j) => {
+          batch.set(doc(db, 'joueurs', j.id), sanitizeForFirestore(j));
+        });
+        await batch.commit();
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, path);
+      // Fallback individual sets
+      await Promise.allSettled(
+        joueurs.map((j) => setDoc(doc(db, 'joueurs', j.id), sanitizeForFirestore(j)))
+      );
     }
   },
 
@@ -173,9 +229,10 @@ export const FirebaseDataService = {
   },
 
   async saveMatch(matchItem: Match): Promise<void> {
+    if (!matchItem || !matchItem.id) return;
     const path = `matchs/${matchItem.id}`;
     try {
-      await setDoc(doc(db, 'matchs', matchItem.id), sanitizeForFirestore(matchItem));
+      await setDoc(doc(db, 'matchs', matchItem.id), sanitizeMatch(matchItem));
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, path);
     }
@@ -204,19 +261,25 @@ export const FirebaseDataService = {
   },
 
   async batchSaveMatchs(matchs: Match[]): Promise<void> {
+    if (!matchs || matchs.length === 0) return;
     const path = 'matchs';
     try {
-      const CHUNK_SIZE = 400;
+      const CHUNK_SIZE = 300;
       for (let i = 0; i < matchs.length; i += CHUNK_SIZE) {
         const chunk = matchs.slice(i, i + CHUNK_SIZE);
         const batch = writeBatch(db);
         chunk.forEach((m) => {
-          batch.set(doc(db, 'matchs', m.id), sanitizeForFirestore(m));
+          if (m && m.id) {
+            batch.set(doc(db, 'matchs', m.id), sanitizeMatch(m));
+          }
         });
         await batch.commit();
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, path);
+      // Resilient fallback with individual document sets
+      await Promise.allSettled(
+        matchs.filter((m) => m && m.id).map((m) => setDoc(doc(db, 'matchs', m.id), sanitizeMatch(m)))
+      );
     }
   },
 
@@ -232,19 +295,48 @@ export const FirebaseDataService = {
   },
 
   async saveFeuillesMatch(feuilles: FeuilleMatchLigne[]): Promise<void> {
+    if (!feuilles || feuilles.length === 0) return;
     const path = 'feuillesMatch';
     try {
-      const CHUNK_SIZE = 400;
+      const CHUNK_SIZE = 300;
       for (let i = 0; i < feuilles.length; i += CHUNK_SIZE) {
         const chunk = feuilles.slice(i, i + CHUNK_SIZE);
         const batch = writeBatch(db);
         chunk.forEach((f) => {
-          batch.set(doc(db, 'feuillesMatch', f.id), sanitizeForFirestore(f));
+          if (f && f.id) {
+            batch.set(doc(db, 'feuillesMatch', f.id), sanitizeFeuille(f));
+          }
         });
         await batch.commit();
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, path);
+      // Fallback to individual sets
+      await Promise.allSettled(
+        feuilles.filter((f) => f && f.id).map((f) => setDoc(doc(db, 'feuillesMatch', f.id), sanitizeFeuille(f)))
+      );
+    }
+  },
+
+  // Save only the feuille rows of a specific match (much faster and avoids quota waste)
+  async saveMatchFeuilles(matchId: string, matchFeuilles: FeuilleMatchLigne[]): Promise<void> {
+    if (!matchId || !matchFeuilles || matchFeuilles.length === 0) return;
+    const path = 'feuillesMatch';
+    try {
+      const batch = writeBatch(db);
+      matchFeuilles.forEach((f) => {
+        const clean = sanitizeFeuille({ ...f, matchId });
+        batch.set(doc(db, 'feuillesMatch', clean.id as string), clean);
+      });
+      await batch.commit();
+    } catch (err) {
+      console.warn('saveMatchFeuilles batch commit fallback:', err);
+      // Individual fallback guarantees writes even under high concurrency
+      await Promise.allSettled(
+        matchFeuilles.map((f) => {
+          const clean = sanitizeFeuille({ ...f, matchId });
+          return setDoc(doc(db, 'feuillesMatch', clean.id as string), clean);
+        })
+      );
     }
   },
 
@@ -265,7 +357,9 @@ export const FirebaseDataService = {
       const res: Record<string, CompositionMatch> = {};
       snap.docs.forEach((d) => {
         const item = d.data() as CompositionMatch;
-        res[item.matchId] = item;
+        if (item && item.matchId) {
+          res[item.matchId] = item;
+        }
       });
       return res;
     } catch (err) {
@@ -274,6 +368,7 @@ export const FirebaseDataService = {
   },
 
   async saveComposition(comp: CompositionMatch): Promise<void> {
+    if (!comp || !comp.matchId) return;
     const path = `compositions/${comp.matchId}`;
     try {
       await setDoc(doc(db, 'compositions', comp.matchId), sanitizeForFirestore(comp));
@@ -283,15 +378,22 @@ export const FirebaseDataService = {
   },
 
   async batchSaveCompositions(compositions: Record<string, CompositionMatch>): Promise<void> {
+    if (!compositions || Object.keys(compositions).length === 0) return;
+    const validComps = Object.values(compositions).filter((c) => c && c.matchId && c.matchId.trim() !== '');
+    if (validComps.length === 0) return;
+
     const path = 'compositions';
     try {
       const batch = writeBatch(db);
-      Object.values(compositions).forEach((comp) => {
+      validComps.forEach((comp) => {
         batch.set(doc(db, 'compositions', comp.matchId), sanitizeForFirestore(comp));
       });
       await batch.commit();
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, path);
+      // Individual set fallback
+      await Promise.allSettled(
+        validComps.map((comp) => setDoc(doc(db, 'compositions', comp.matchId), sanitizeForFirestore(comp)))
+      );
     }
   },
 

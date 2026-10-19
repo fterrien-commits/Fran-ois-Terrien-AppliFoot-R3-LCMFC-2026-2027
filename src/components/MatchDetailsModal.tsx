@@ -200,10 +200,23 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
 
   const currentMatchRows = joueurs.map((j) => {
     const l = feuilleMatch.find((f) => f.joueurId === j.id);
+    const ligne: FeuilleMatchLigne = l || {
+      id: `f_${match.id}_${j.id}`,
+      matchId: match.id,
+      joueurId: j.id,
+      titulaire: false,
+      statut: 'non_convoque' as StatutMatchJoueur,
+      minutesJouees: 0,
+      buts: 0,
+      passesDecisives: 0,
+      cartonsJaunes: 0,
+      cartonsRouges: 0,
+      note: null,
+    };
     return {
       joueur: j,
-      statut: getLigneStatut(l),
-      ligne: l,
+      statut: getLigneStatut(ligne),
+      ligne,
     };
   });
   const nbTitulaires = currentMatchRows.filter((r) => r.statut === 'titulaire').length;
@@ -223,12 +236,14 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
 
     setMatchData(validatedMatch);
 
+    const completeFeuilles = currentMatchRows.map((r) => r.ligne);
+
     if (onValidateMatch) {
-      onValidateMatch(validatedMatch, composition, feuilleMatch);
+      onValidateMatch(validatedMatch, composition, completeFeuilles);
     } else {
       onSaveMatch(validatedMatch);
       onUpdateComposition(composition);
-      onUpdateFeuillesMatch(feuilleMatch);
+      onUpdateFeuillesMatch(completeFeuilles);
     }
 
     setValidationNotice(

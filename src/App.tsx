@@ -100,19 +100,41 @@ export default function App() {
   const [backupNotice, setBackupNotice] = useState<string | null>(null);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
-  // Initialize data from LocalStorage & Listen to Firebase Auth
+  // Initialize data from LocalStorage & IndexedDB & Listen to Firebase Auth
   useEffect(() => {
-    setJoueurs(StorageService.getJoueurs());
-    setMatchs(StorageService.getMatchs());
-    setFeuillesMatch(StorageService.getFeuillesMatch());
-    setCompositions(StorageService.getCompositions());
+    // 1. Initial immediate synchronous load from LocalStorage
+    const initialJ = StorageService.getJoueurs();
+    const initialM = StorageService.getMatchs();
+    const initialF = StorageService.getFeuillesMatch();
+    const initialC = StorageService.getCompositions();
+
+    if (initialJ.length > 0) setJoueurs(initialJ);
+    if (initialM.length > 0) setMatchs(initialM.sort((a, b) => (b.date || '').localeCompare(a.date || '')));
+    if (initialF.length > 0) setFeuillesMatch(initialF);
+    if (Object.keys(initialC).length > 0) setCompositions(initialC);
+
+    // 2. Asynchronous recovery from IndexedDB (in case LocalStorage was wiped by ChromeOS on close)
+    StorageService.loadFromIndexedDB().then((idbData) => {
+      if (idbData.matchs && idbData.matchs.length > 0) {
+        setMatchs(idbData.matchs.sort((a, b) => (b.date || '').localeCompare(a.date || '')));
+      }
+      if (idbData.joueurs && idbData.joueurs.length > 0) {
+        setJoueurs(idbData.joueurs);
+      }
+      if (idbData.feuilles && idbData.feuilles.length > 0) {
+        setFeuillesMatch(idbData.feuilles);
+      }
+      if (idbData.compositions && Object.keys(idbData.compositions).length > 0) {
+        setCompositions(idbData.compositions);
+      }
+    });
 
     // Listen to Firebase Authentication state
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
     });
 
-    // Attempt initial sync from Cloud Firestore with smart non-destructive merging
+    // Attempt sync from Cloud Firestore (source of truth - never resurrects demo mock data)
     const initCloudData = async () => {
       try {
         const [cloudJoueurs, cloudMatchs, cloudFeuilles, cloudComps, cloudConfig] = await Promise.allSettled([
@@ -123,88 +145,119 @@ export default function App() {
           FirebaseDataService.getClubConfig(),
         ]);
 
-        // 1. Smart merge Joueurs: Never wipe local players
-        if (cloudJoueurs.status === 'fulfilled' && cloudJoueurs.value) {
+        // Determine if cloud or local has real custom user data
+        const cloudHasCustomJoueurs = cloudJoueurs.status === 'fulfilled' && (cloudJoueurs.value || []).some((j) => j.id.startsWith('j_'));
+        const cloudHasCustomMatchs = cloudMatchs.status === 'fulfilled' && (cloudMatchs.value || []).some((m) => m.id.startsWith('m_'));
+
+        // 1. Process Joueurs
+        if (cloudJoueurs.status === 'fulfilled' && cloudJoueurs.value && cloudJoueurs.value.length > 0) {
           const localJ = StorageService.getJoueurs();
+          let filteredCloudJ = cloudJoueurs.value;
+          if (cloudHasCustomJoueurs) {
+            filteredCloudJ = filteredCloudJ.filter((j) => !/^j\d+$/.test(j.id));
+          }
           const mergedJMap = new Map<string, Joueur>();
-          cloudJoueurs.value.forEach((j) => mergedJMap.set(j.id, j));
-          let needPushJ = false;
+          filteredCloudJ.forEach((j) => mergedJMap.set(j.id, j));
+          // Merge local custom players if not in cloud
           localJ.forEach((j) => {
-            if (!mergedJMap.has(j.id)) {
-              needPushJ = true;
+            if (j.id.startsWith('j_') && !mergedJMap.has(j.id)) {
               mergedJMap.set(j.id, j);
-            } else {
-              mergedJMap.set(j.id, { ...mergedJMap.get(j.id)!, ...j });
             }
           });
           const mergedJ = Array.from(mergedJMap.values());
           if (mergedJ.length > 0) {
             setJoueurs(mergedJ);
             StorageService.saveJoueurs(mergedJ);
-            if (needPushJ) {
-              FirebaseDataService.batchSaveJoueurs(mergedJ).catch(console.error);
-            }
           }
         }
 
-        // 2. Smart merge Matchs: NEVER overwrite or drop matches!
-        if (cloudMatchs.status === 'fulfilled' && cloudMatchs.value) {
+        // 2. Process Matchs
+        let validMatchIds = new Set<string>();
+        if (cloudMatchs.status === 'fulfilled' && cloudMatchs.value && cloudMatchs.value.length > 0) {
           const localM = StorageService.getMatchs();
+          let filteredCloudM = cloudMatchs.value;
+          if (cloudHasCustomMatchs) {
+            filteredCloudM = filteredCloudM.filter((m) => !/^m\d+$/.test(m.id));
+          }
           const mergedMMap = new Map<string, Match>();
-          cloudMatchs.value.forEach((m) => mergedMMap.set(m.id, m));
-          let needPushM = false;
+          filteredCloudM.forEach((m) => mergedMMap.set(m.id, m));
+          // Merge local custom matches created offline
           localM.forEach((m) => {
-            if (!mergedMMap.has(m.id)) {
-              needPushM = true;
+            if (m.id.startsWith('m_') && !mergedMMap.has(m.id)) {
               mergedMMap.set(m.id, m);
-            } else {
-              mergedMMap.set(m.id, { ...mergedMMap.get(m.id)!, ...m });
             }
           });
-          const mergedM = Array.from(mergedMMap.values());
+          const mergedM = Array.from(mergedMMap.values()).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
           if (mergedM.length > 0) {
             setMatchs(mergedM);
             StorageService.saveMatchs(mergedM);
-            if (needPushM) {
-              FirebaseDataService.batchSaveMatchs(mergedM).catch(console.error);
-            }
+            validMatchIds = new Set(mergedM.map((m) => m.id));
           }
         }
 
-        // 3. Smart merge Feuilles de Match
-        if (cloudFeuilles.status === 'fulfilled' && cloudFeuilles.value) {
+        // 3. Process Feuilles de Match (only keep sheets belonging to valid matches)
+        if (cloudFeuilles.status === 'fulfilled' && cloudFeuilles.value && cloudFeuilles.value.length > 0) {
           const localF = StorageService.getFeuillesMatch();
           const mergedFMap = new Map<string, FeuilleMatchLigne>();
-          cloudFeuilles.value.forEach((f) => mergedFMap.set(f.id, f));
-          let needPushF = false;
-          localF.forEach((f) => {
-            if (!mergedFMap.has(f.id)) {
-              needPushF = true;
+          cloudFeuilles.value.forEach((f) => {
+            if (validMatchIds.size === 0 || validMatchIds.has(f.matchId)) {
               mergedFMap.set(f.id, f);
-            } else {
-              mergedFMap.set(f.id, { ...mergedFMap.get(f.id)!, ...f });
+            }
+          });
+          // Merge local sheets for valid matches: never overwrite local entered data with empty cloud placeholders
+          localF.forEach((localRow) => {
+            if (validMatchIds.size === 0 || validMatchIds.has(localRow.matchId)) {
+              const existingCloud = mergedFMap.get(localRow.id);
+              if (!existingCloud) {
+                mergedFMap.set(localRow.id, localRow);
+              } else {
+                const localHasData =
+                  (localRow.buts || 0) > 0 ||
+                  (localRow.passesDecisives || 0) > 0 ||
+                  (localRow.cartonsJaunes || 0) > 0 ||
+                  (localRow.cartonsRouges || 0) > 0 ||
+                  (localRow.note !== null && localRow.note !== undefined) ||
+                  (localRow.minutesJouees || 0) > 0;
+                const cloudHasData =
+                  (existingCloud.buts || 0) > 0 ||
+                  (existingCloud.passesDecisives || 0) > 0 ||
+                  (existingCloud.cartonsJaunes || 0) > 0 ||
+                  (existingCloud.cartonsRouges || 0) > 0 ||
+                  (existingCloud.note !== null && existingCloud.note !== undefined) ||
+                  (existingCloud.minutesJouees || 0) > 0;
+
+                if (localHasData && !cloudHasData) {
+                  mergedFMap.set(localRow.id, localRow);
+                  // Resync to cloud in background so cloud gets the data
+                  FirebaseDataService.saveMatchFeuilles(localRow.matchId, [localRow]).catch(console.error);
+                }
+              }
             }
           });
           const mergedF = Array.from(mergedFMap.values());
           if (mergedF.length > 0) {
             setFeuillesMatch(mergedF);
             StorageService.saveFeuillesMatch(mergedF);
-            if (needPushF) {
-              FirebaseDataService.saveFeuillesMatch(mergedF).catch(console.error);
-            }
           }
         }
 
-        // 4. Smart merge Compositions
-        if (cloudComps.status === 'fulfilled' && cloudComps.value) {
+        // 4. Process Compositions
+        if (cloudComps.status === 'fulfilled' && cloudComps.value && Object.keys(cloudComps.value).length > 0) {
           const localC = StorageService.getCompositions();
-          const mergedC = { ...cloudComps.value, ...localC };
-          if (Object.keys(mergedC).length > 0) {
-            setCompositions(mergedC);
-            StorageService.saveCompositions(mergedC);
-            if (Object.keys(localC).some((k) => !cloudComps.value[k])) {
-              FirebaseDataService.batchSaveCompositions(mergedC).catch(console.error);
+          const cleanComps: Record<string, CompositionMatch> = {};
+          Object.entries(cloudComps.value).forEach(([mId, comp]) => {
+            if (validMatchIds.size === 0 || validMatchIds.has(mId)) {
+              cleanComps[mId] = comp;
             }
+          });
+          Object.entries(localC).forEach(([mId, comp]) => {
+            if (mId.startsWith('m_') && !cleanComps[mId] && (validMatchIds.size === 0 || validMatchIds.has(mId))) {
+              cleanComps[mId] = comp;
+            }
+          });
+          if (Object.keys(cleanComps).length > 0) {
+            setCompositions(cleanComps);
+            StorageService.saveCompositions(cleanComps);
           }
         }
 
@@ -251,7 +304,7 @@ export default function App() {
       const otherFeuilles = prevFeuilles.filter((f) => f.matchId !== matchId);
       const merged = [...otherFeuilles, ...matchFeuilles];
       StorageService.saveFeuillesMatch(merged);
-      FirebaseDataService.saveFeuillesMatch(merged).catch(console.error);
+      FirebaseDataService.saveMatchFeuilles(matchId, matchFeuilles).catch(console.error);
       return merged;
     });
   };
@@ -497,7 +550,7 @@ export default function App() {
       const otherFeuilles = prevFeuilles.filter((f) => f.matchId !== validatedMatch.id);
       const updatedFeuilles = [...otherFeuilles, ...newFeuilles];
       StorageService.saveFeuillesMatch(updatedFeuilles);
-      FirebaseDataService.saveFeuillesMatch(newFeuilles).catch(console.error);
+      FirebaseDataService.saveMatchFeuilles(validatedMatch.id, newFeuilles).catch(console.error);
       return updatedFeuilles;
     });
 
