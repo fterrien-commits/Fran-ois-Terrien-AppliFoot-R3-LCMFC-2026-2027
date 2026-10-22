@@ -18,6 +18,10 @@ import {
   User as UserIcon,
   Users,
   X,
+  Lock,
+  Unlock,
+  Eye,
+  Edit3,
 } from 'lucide-react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { CompositionMatch, FeuilleMatchLigne, Joueur, Match, TYPES_MATCH_CONFIG, detectTypeMatch } from './types';
@@ -31,6 +35,8 @@ import { JoueurDetailModal } from './components/JoueurDetailModal';
 import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
 import { ImageUploadDropzone } from './components/ImageUploadDropzone';
 import { FirebaseSyncModal } from './components/FirebaseSyncModal';
+import { RoleAuthModal } from './components/RoleAuthModal';
+import { InitialModeSelectorModal } from './components/InitialModeSelectorModal';
 import {
   auth,
   loginWithGoogle,
@@ -40,6 +46,43 @@ import {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'recapitulatif' | 'matchs' | 'joueurs'>('recapitulatif');
+
+  // Operational Mode: Mode Lecteur (Dirigeants) vs Mode Éditeur (Entraîneur, code: Timamilo)
+  const [userRole, setUserRole] = useState<'lecteur' | 'editeur'>(() => {
+    return (localStorage.getItem('footstats_user_role') as 'lecteur' | 'editeur') || 'lecteur';
+  });
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isInitialModeModalOpen, setIsInitialModeModalOpen] = useState(() => {
+    return !sessionStorage.getItem('footstats_initial_mode_chosen');
+  });
+
+  const handleSelectLecteurMode = () => {
+    setUserRole('lecteur');
+    localStorage.setItem('footstats_user_role', 'lecteur');
+    sessionStorage.setItem('footstats_initial_mode_chosen', 'true');
+    setIsInitialModeModalOpen(false);
+  };
+
+  const handleOpenAuthModal = () => {
+    setIsInitialModeModalOpen(false);
+    setIsAuthModalOpen(true);
+  };
+
+  const handleUnlockEditorMode = () => {
+    setUserRole('editeur');
+    localStorage.setItem('footstats_user_role', 'editeur');
+    sessionStorage.setItem('footstats_initial_mode_chosen', 'true');
+    setIsAuthModalOpen(false);
+    setBackupNotice('✓ Mode Éditeur activé (Coach). Vous pouvez enregistrer et modifier tous les matchs et effectifs.');
+    setTimeout(() => setBackupNotice(null), 4000);
+  };
+
+  const handleLockReaderMode = () => {
+    setUserRole('lecteur');
+    localStorage.setItem('footstats_user_role', 'lecteur');
+    setBackupNotice('Mode Lecteur (Dirigeants) activé. Consultation uniquement.');
+    setTimeout(() => setBackupNotice(null), 3500);
+  };
 
   // Firebase Auth & Cloud Sync state
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -185,13 +228,29 @@ export default function App() {
           localM.forEach((m) => {
             if (m.id.startsWith('m_') && !mergedMMap.has(m.id)) {
               mergedMMap.set(m.id, m);
+              FirebaseDataService.saveMatch(m).catch(console.error);
             }
           });
-          const mergedM = Array.from(mergedMMap.values()).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-          if (mergedM.length > 0) {
-            setMatchs(mergedM);
-            StorageService.saveMatchs(mergedM);
-            validMatchIds = new Set(mergedM.map((m) => m.id));
+
+          // Functional state update: ensure in-flight created matches are never overwritten
+          setMatchs((prevMatchs) => {
+            prevMatchs.forEach((m) => {
+              if (m.id.startsWith('m_') && !mergedMMap.has(m.id)) {
+                mergedMMap.set(m.id, m);
+                FirebaseDataService.saveMatch(m).catch(console.error);
+              }
+            });
+            const mergedM = Array.from(mergedMMap.values()).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            if (mergedM.length > 0) {
+              StorageService.saveMatchs(mergedM);
+              validMatchIds = new Set(mergedM.map((m) => m.id));
+            }
+            return mergedM.length > 0 ? mergedM : prevMatchs;
+          });
+        } else {
+          const localM = StorageService.getMatchs();
+          if (localM.length > 0) {
+            validMatchIds = new Set(localM.map((m) => m.id));
           }
         }
 
@@ -442,11 +501,11 @@ export default function App() {
   };
 
   // Add a new match with individual and collective data auto-saved and aggregated into stats
-  const handleAddMatch = (
+  const handleAddMatch = async (
     newMatch: Match,
     customFeuilles?: FeuilleMatchLigne[],
     customComp?: CompositionMatch
-  ) => {
+  ): Promise<void> => {
     // Ensure match is marked as completed and validated for immediate stats aggregation
     const matchWithValidation: Match = {
       ...newMatch,
@@ -454,9 +513,6 @@ export default function App() {
       valide: true,
       dateValidation: newMatch.dateValidation || new Date().toISOString(),
     };
-
-    const updatedMatchs = [matchWithValidation, ...matchs];
-    handleUpdateMatchs(updatedMatchs);
 
     // Bootstrap or apply composition for this match
     let finalComp: CompositionMatch;
@@ -478,11 +534,6 @@ export default function App() {
       };
     }
 
-    handleUpdateCompositions({
-      ...compositions,
-      [newMatch.id]: finalComp,
-    });
-
     // Create custom or default rows in match sheet
     let finalFeuilles: FeuilleMatchLigne[];
     if (customFeuilles && customFeuilles.length > 0) {
@@ -503,17 +554,57 @@ export default function App() {
       }));
     }
 
-    handleUpdateFeuillesMatch([...feuillesMatch, ...finalFeuilles]);
+    // Functional state updates to guarantee zero race condition
+    setMatchs((prev) => {
+      const updated = [matchWithValidation, ...prev.filter((m) => m.id !== matchWithValidation.id)];
+      StorageService.saveMatchs(updated);
+      return updated;
+    });
 
-    setBackupNotice(
-      `✓ Nouveau match créé ! Données individuelles et collectives sauvegardées et agrégées dans le Tableau Annuel & Stats.`
-    );
+    setCompositions((prev) => {
+      const updated = {
+        ...prev,
+        [newMatch.id]: finalComp,
+      };
+      StorageService.saveCompositions(updated);
+      return updated;
+    });
+
+    setFeuillesMatch((prev) => {
+      const otherFeuilles = prev.filter((f) => f.matchId !== newMatch.id);
+      const updated = [...otherFeuilles, ...finalFeuilles];
+      StorageService.saveFeuillesMatch(updated);
+      return updated;
+    });
+
+    // ATOMIC DIRECT FIRESTORE PERSISTENCE (AWAITED)
+    try {
+      await Promise.all([
+        FirebaseDataService.saveMatch(matchWithValidation),
+        FirebaseDataService.saveComposition(finalComp),
+        FirebaseDataService.saveMatchFeuilles(newMatch.id, finalFeuilles),
+      ]);
+      setBackupNotice(
+        `✓ Nouveau match contre "${matchWithValidation.adversaire}" sauvegardé avec succès (Local + Cloud Firestore) !`
+      );
+    } catch (err) {
+      console.warn('Erreur réplication cloud nouveau match (protégé en local):', err);
+      setBackupNotice(
+        `✓ Nouveau match enregistré sur cet appareil !`
+      );
+    }
+
     setTimeout(() => setBackupNotice(null), 4000);
   };
 
   // Save edited match
   const handleSaveMatch = (updatedMatch: Match) => {
-    handleUpdateMatchs(matchs.map((m) => (m.id === updatedMatch.id ? updatedMatch : m)));
+    setMatchs((prev) => {
+      const next = prev.map((m) => (m.id === updatedMatch.id ? updatedMatch : m));
+      StorageService.saveMatchs(next);
+      return next;
+    });
+    FirebaseDataService.saveMatch(updatedMatch).catch(console.error);
     if (selectedMatch?.id === updatedMatch.id) {
       setSelectedMatch(updatedMatch);
     }
@@ -590,10 +681,15 @@ export default function App() {
 
   // Update specific match composition
   const handleSaveMatchComposition = (newComp: CompositionMatch) => {
-    handleUpdateCompositions({
-      ...compositions,
-      [newComp.matchId]: newComp,
+    setCompositions((prev) => {
+      const updated = {
+        ...prev,
+        [newComp.matchId]: newComp,
+      };
+      StorageService.saveCompositions(updated);
+      return updated;
     });
+    FirebaseDataService.saveComposition(newComp).catch(console.error);
   };
 
   // Reset to initial demo database
@@ -718,8 +814,35 @@ export default function App() {
             </div>
           </div>
 
-          {/* Quick Actions (Firebase Cloud / Export / Import / Theme / Reset) */}
+          {/* Quick Actions (Mode Switcher / Firebase Cloud / Theme / Export / Import / Reset) */}
           <div className="flex items-center gap-2">
+            {/* Mode Selector Button (Lecteur vs Éditeur) */}
+            {userRole === 'editeur' ? (
+              <button
+                id="btn-mode-switcher-editeur"
+                onClick={handleLockReaderMode}
+                title="Mode Éditeur actif (Entraîneur) - Cliquez pour verrouiller en Mode Lecteur (Dirigeants)"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/50 bg-emerald-500/15 hover:bg-emerald-500/25 text-xs font-bold text-emerald-300 transition-all shadow-sm cursor-pointer"
+              >
+                <Unlock className="w-4 h-4 text-emerald-400" />
+                <span className="font-extrabold text-xs">Mode Éditeur</span>
+                <span className="hidden md:inline text-[10px] bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40 text-emerald-200">Coach</span>
+              </button>
+            ) : (
+              <button
+                id="btn-mode-switcher-lecteur"
+                onClick={handleOpenAuthModal}
+                title="Mode Lecteur actif (Dirigeants) - Cliquez pour déverrouiller le Mode Éditeur (Mot de passe)"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-xs font-bold text-amber-300 transition-all shadow-sm cursor-pointer"
+              >
+                <Eye className="w-4 h-4 text-amber-400" />
+                <span className="font-extrabold text-xs">Mode Lecteur</span>
+                <span className="hidden md:inline text-[10px] bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-200 flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5" /> Dirigeants
+                </span>
+              </button>
+            )}
+
             {/* Firebase Cloud Database Status & Sync Modal trigger */}
             <button
               onClick={() => setIsFirebaseModalOpen(true)}
@@ -764,26 +887,30 @@ export default function App() {
               <Download className="w-4 h-4" />
             </button>
 
-            <label
-              title="Importer une sauvegarde JSON"
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-slate-800 cursor-pointer"
-            >
-              <Upload className="w-4 h-4" />
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImportBackup}
-                className="hidden"
-              />
-            </label>
+            {userRole === 'editeur' && (
+              <label
+                title="Importer une sauvegarde JSON"
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-slate-800 cursor-pointer"
+              >
+                <Upload className="w-4 h-4" />
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportBackup}
+                  className="hidden"
+                />
+              </label>
+            )}
 
-            <button
-              onClick={() => setIsResetModalOpen(true)}
-              title="Réinitialiser les données de démonstration"
-              className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors border border-slate-800"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
+            {userRole === 'editeur' && (
+              <button
+                onClick={() => setIsResetModalOpen(true)}
+                title="Réinitialiser les données de démonstration"
+                className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors border border-slate-800"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -872,6 +999,7 @@ export default function App() {
             onAddMatch={handleAddMatch}
             onDeleteMatch={handleDeleteMatch}
             onDeleteMatchs={handleDeleteMatchs}
+            isReadOnly={userRole === 'lecteur'}
           />
         )}
 
@@ -884,6 +1012,7 @@ export default function App() {
             onDeleteJoueur={handleDeleteJoueur}
             onDeleteJoueurs={handleDeleteJoueurs}
             onSelectJoueur={(j) => setSelectedJoueur(j)}
+            isReadOnly={userRole === 'lecteur'}
           />
         )}
       </main>
@@ -908,6 +1037,7 @@ export default function App() {
             setSelectedMatch(null);
             setActiveTab('recapitulatif');
           }}
+          readOnly={userRole === 'lecteur'}
         />
       )}
 
@@ -922,8 +1052,8 @@ export default function App() {
             setSelectedJoueur(null);
             setSelectedMatch(m);
           }}
-          onDeleteJoueur={handleDeleteJoueur}
-          onUpdateJoueur={handleEditJoueur}
+          onDeleteJoueur={userRole === 'editeur' ? handleDeleteJoueur : undefined}
+          onUpdateJoueur={userRole === 'editeur' ? handleEditJoueur : undefined}
         />
       )}
 
@@ -1028,6 +1158,20 @@ export default function App() {
         }}
         isSyncing={isCloudSyncing}
         lastSyncTime={lastSyncTime}
+      />
+
+      {/* Initial Startup Welcome / Mode Choice Modal (Lecteur vs Éditeur) */}
+      <InitialModeSelectorModal
+        isOpen={isInitialModeModalOpen}
+        onSelectLecteur={handleSelectLecteurMode}
+        onSelectEditeur={handleOpenAuthModal}
+      />
+
+      {/* Role Authentication Modal (Password: Timamilo) */}
+      <RoleAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={handleUnlockEditorMode}
       />
     </div>
   );

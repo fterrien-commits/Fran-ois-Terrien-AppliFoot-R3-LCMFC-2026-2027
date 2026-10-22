@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   X,
   Sparkles,
+  Eye,
 } from 'lucide-react';
 import {
   CompositionMatch,
@@ -66,6 +67,7 @@ interface MatchsListProps {
   ) => void;
   onDeleteMatch?: (matchId: string) => void;
   onDeleteMatchs?: (matchIds: string[]) => void;
+  isReadOnly?: boolean;
 }
 
 const METEO_OPTIONS: MeteoType[] = [
@@ -86,8 +88,10 @@ export const MatchsList: React.FC<MatchsListProps> = ({
   onAddMatch,
   onDeleteMatch,
   onDeleteMatchs,
+  isReadOnly = false,
 }) => {
   const [isAddingMatch, setIsAddingMatch] = useState(false);
+  const [isSubmittingNewMatch, setIsSubmittingNewMatch] = useState(false);
   const [newMatchTab, setNewMatchTab] = useState<'collectif' | 'individuel'>('collectif');
   const [isConfirmDiscardModalOpen, setIsConfirmDiscardModalOpen] = useState(false);
   const [playerSearchTerm, setPlayerSearchTerm] = useState('');
@@ -328,66 +332,72 @@ export const MatchsList: React.FC<MatchsListProps> = ({
 
   const selectedMatches = matchs.filter((m) => selectedIds.has(m.id));
 
-  const handleSubmitNewMatch = (e: React.FormEvent) => {
+  const handleSubmitNewMatch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMatchForm.adversaire.trim()) {
       setNewMatchTab('collectif');
       return;
     }
+    if (isSubmittingNewMatch) return;
+    setIsSubmittingNewMatch(true);
 
-    const matchId = `m_${Date.now()}`;
-    const newMatch: Match = {
-      ...newMatchForm,
-      id: matchId,
-      statut: 'termine',
-      valide: true,
-      dateValidation: new Date().toISOString(),
-      photos: newMatchForm.photos || [],
-    };
+    try {
+      const matchId = `m_${Date.now()}`;
+      const newMatch: Match = {
+        ...newMatchForm,
+        id: matchId,
+        statut: 'termine',
+        valide: true,
+        dateValidation: new Date().toISOString(),
+        photos: newMatchForm.photos || [],
+      };
 
-    // Bootstrap composition based on titular players chosen
-    const preset =
-      FORMATION_PRESETS[newMatchForm.systemeEquipe] || FORMATION_PRESETS['4-3-3'];
-    const starters = playerEntriesArray
-      .filter((p) => p.entry.role === 'titulaire')
-      .map((p) => p.joueur);
+      // Bootstrap composition based on titular players chosen
+      const preset =
+        FORMATION_PRESETS[newMatchForm.systemeEquipe] || FORMATION_PRESETS['4-3-3'];
+      const starters = playerEntriesArray
+        .filter((p) => p.entry.role === 'titulaire')
+        .map((p) => p.joueur);
 
-    const initialPositions = preset.roles.map((role, idx) => ({
-      joueurId: starters[idx]?.id || '',
-      roleLabel: role.roleLabel,
-      x: role.x,
-      y: role.y,
-    }));
+      const initialPositions = preset.roles.map((role, idx) => ({
+        joueurId: starters[idx]?.id || '',
+        roleLabel: role.roleLabel,
+        x: role.x,
+        y: role.y,
+      }));
 
-    const customComp: CompositionMatch = {
-      matchId,
-      systeme: newMatchForm.systemeEquipe,
-      positions: initialPositions,
-    };
+      const customComp: CompositionMatch = {
+        matchId,
+        systeme: newMatchForm.systemeEquipe,
+        positions: initialPositions,
+      };
 
-    // Bootstrap sheet rows with all entered individual stats
-    const customFeuilles: FeuilleMatchLigne[] = playerEntriesArray.map(
-      ({ joueur, entry }) => {
-        const isActif = entry.role === 'titulaire' || entry.role === 'remplacant';
-        return {
-          id: `f_${matchId}_${joueur.id}`,
-          matchId,
-          joueurId: joueur.id,
-          titulaire: entry.role === 'titulaire',
-          statut: entry.role,
-          minutesJouees: isActif ? entry.minutes : 0,
-          buts: isActif ? entry.buts : 0,
-          passesDecisives: isActif ? entry.passes : 0,
-          cartonsJaunes: isActif ? entry.cartonsJaunes : 0,
-          cartonsRouges: isActif ? entry.cartonsRouges : 0,
-          note: isActif ? entry.note : null,
-        };
-      }
-    );
+      // Bootstrap sheet rows with all entered individual stats for all 24 players
+      const customFeuilles: FeuilleMatchLigne[] = playerEntriesArray.map(
+        ({ joueur, entry }) => {
+          const isActif = entry.role === 'titulaire' || entry.role === 'remplacant';
+          return {
+            id: `f_${matchId}_${joueur.id}`,
+            matchId,
+            joueurId: joueur.id,
+            titulaire: entry.role === 'titulaire',
+            statut: entry.role,
+            minutesJouees: isActif ? entry.minutes : 0,
+            buts: isActif ? entry.buts : 0,
+            passesDecisives: isActif ? entry.passes : 0,
+            cartonsJaunes: isActif ? entry.cartonsJaunes : 0,
+            cartonsRouges: isActif ? entry.cartonsRouges : 0,
+            note: isActif ? entry.note : null,
+          };
+        }
+      );
 
-    onAddMatch(newMatch, customFeuilles, customComp);
-    setIsAddingMatch(false);
-    onSelectMatch(newMatch);
+      await Promise.resolve(onAddMatch(newMatch, customFeuilles, customComp));
+      setIsAddingMatch(false);
+      onSelectMatch(newMatch);
+    } finally {
+      setIsSubmittingNewMatch(false);
+    }
   };
 
   return (
@@ -405,40 +415,49 @@ export const MatchsList: React.FC<MatchsListProps> = ({
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          {matchs.length > 0 && (
-            <button
-              id="btn-selection-matchs"
-              onClick={() => {
-                if (isSelectionMode && selectedIds.size === 0) {
-                  setIsSelectionMode(false);
-                } else {
-                  setIsSelectionMode(true);
-                }
-              }}
-              className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3.5 py-2.5 rounded-xl border transition-all ${
-                isSelectionMode || selectedIds.size > 0
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  : 'bg-slate-800 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-750'
-              }`}
-            >
-              <CheckSquare className="w-4 h-4" />
-              <span>{isSelectionMode || selectedIds.size > 0 ? 'Mode Sélection' : 'Sélectionner'}</span>
-            </button>
-          )}
+          {isReadOnly ? (
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-300 text-xs font-semibold shadow-sm">
+              <Eye className="w-4 h-4 text-emerald-400" />
+              <span>Mode Consultation (Dirigeants)</span>
+            </div>
+          ) : (
+            <>
+              {matchs.length > 0 && (
+                <button
+                  id="btn-selection-matchs"
+                  onClick={() => {
+                    if (isSelectionMode && selectedIds.size === 0) {
+                      setIsSelectionMode(false);
+                    } else {
+                      setIsSelectionMode(true);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3.5 py-2.5 rounded-xl border transition-all ${
+                    isSelectionMode || selectedIds.size > 0
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-slate-800 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-750'
+                  }`}
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  <span>{isSelectionMode || selectedIds.size > 0 ? 'Mode Sélection' : 'Sélectionner'}</span>
+                </button>
+              )}
 
-          <button
-            id="btn-ajouter-nouveau-match"
-            onClick={handleOpenAddMatch}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-lg shadow-emerald-950/50 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Nouveau Match
-          </button>
+              <button
+                id="btn-ajouter-nouveau-match"
+                onClick={handleOpenAddMatch}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-lg shadow-emerald-950/50 transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Nouveau Match
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {/* Batch Action Toolbar when Selection is active */}
-      {(isSelectionMode || selectedIds.size > 0) && (
+      {!isReadOnly && (isSelectionMode || selectedIds.size > 0) && (
         <div className="bg-slate-900/95 border border-emerald-500/30 rounded-2xl p-3 sm:p-4 shadow-xl flex flex-wrap items-center justify-between gap-3 animate-in slide-in-from-top duration-200">
           <div className="flex items-center gap-3">
             <button
@@ -1218,10 +1237,20 @@ export const MatchsList: React.FC<MatchsListProps> = ({
                   <button
                     id="btn-valider-creation-match"
                     type="submit"
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-950/60 border border-emerald-400/40 transition-all flex items-center gap-2 cursor-pointer"
+                    disabled={isSubmittingNewMatch}
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-950/60 border border-emerald-400/40 transition-all flex items-center gap-2 cursor-pointer"
                   >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-                    <span>Créer le match & Enregistrer tout</span>
+                    {isSubmittingNewMatch ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Enregistrement en cours...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                        <span>Créer le match & Enregistrer tout</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1423,7 +1452,7 @@ export const MatchsList: React.FC<MatchsListProps> = ({
                       </span>
                     )}
 
-                    {onDeleteMatch && (
+                    {!isReadOnly && onDeleteMatch && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

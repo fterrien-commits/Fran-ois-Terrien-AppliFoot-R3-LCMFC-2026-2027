@@ -254,6 +254,15 @@ export const StorageService = {
     if (hasAnyCustom) {
       this.setHasCustomData(true);
     }
+    // Re-hydrate localStorage from IndexedDB so subsequent synchronous calls find the persisted data
+    try {
+      if (j && j.length > 0) localStorage.setItem(STORAGE_KEYS.JOUEURS, JSON.stringify(j));
+      if (m && m.length > 0) localStorage.setItem(STORAGE_KEYS.MATCHS, JSON.stringify(m));
+      if (f && f.length > 0) localStorage.setItem(STORAGE_KEYS.FEUILLES, JSON.stringify(f));
+      if (c && Object.keys(c).length > 0) localStorage.setItem(STORAGE_KEYS.COMPOSITIONS, JSON.stringify(c));
+    } catch {
+      // Ignore quota errors
+    }
     return {
       joueurs: j || undefined,
       matchs: m || undefined,

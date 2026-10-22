@@ -240,11 +240,13 @@ export function generateDefaultScouting(match: Match): ScoutingAdverse {
 interface PitchAdverseTactiqueProps {
   match: Match;
   onSaveScouting: (scouting: ScoutingAdverse) => void;
+  readOnly?: boolean;
 }
 
 export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
   match,
   onSaveScouting,
+  readOnly = false,
 }) => {
   // Initialize scouting state
   const [scouting, setScouting] = useState<ScoutingAdverse>(() => {
@@ -332,18 +334,22 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
   // Dragging logic
   const handleMouseDown = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsDragging(id);
+    if (!readOnly) {
+      setIsDragging(id);
+      setDragStartPos({ x: e.clientX, y: e.clientY });
+    }
     setSelectedPlayerId(id);
-    setDragStartPos({ x: e.clientX, y: e.clientY });
   };
 
   const handleTouchStart = (id: string, e: React.TouchEvent) => {
     e.stopPropagation();
-    setIsDragging(id);
-    setSelectedPlayerId(id);
-    if (e.touches[0]) {
-      setDragStartPos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+    if (!readOnly) {
+      setIsDragging(id);
+      if (e.touches[0]) {
+        setDragStartPos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+      }
     }
+    setSelectedPlayerId(id);
   };
 
   const handlePointerMove = (clientX: number, clientY: number) => {

@@ -21,6 +21,7 @@ import {
   Globe,
   Zap,
   Gauge,
+  Eye,
 } from 'lucide-react';
 import { FeuilleMatchLigne, Joueur, PiedFort, PosteJoueur, POSTES_CONFIG } from '../types';
 import { getNoteColor } from '../mockData';
@@ -35,6 +36,7 @@ interface JoueursListProps {
   onDeleteJoueur: (joueurId: string) => void;
   onDeleteJoueurs?: (joueurIds: string[]) => void;
   onSelectJoueur?: (joueur: Joueur) => void;
+  isReadOnly?: boolean;
 }
 
 const POSTES_OPTIONS: PosteJoueur[] = [
@@ -69,6 +71,7 @@ export const JoueursList: React.FC<JoueursListProps> = ({
   onDeleteJoueur,
   onDeleteJoueurs,
   onSelectJoueur,
+  isReadOnly = false,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJoueur, setEditingJoueur] = useState<Joueur | null>(null);
@@ -358,40 +361,49 @@ export const JoueursList: React.FC<JoueursListProps> = ({
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          {joueurs.length > 0 && (
-            <button
-              id="btn-selection-joueurs"
-              onClick={() => {
-                if (isSelectionMode && selectedIds.size === 0) {
-                  setIsSelectionMode(false);
-                } else {
-                  setIsSelectionMode(true);
-                }
-              }}
-              className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3.5 py-2.5 rounded-xl border transition-all ${
-                isSelectionMode || selectedIds.size > 0
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  : 'bg-slate-800 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-750'
-              }`}
-            >
-              <CheckSquare className="w-4 h-4" />
-              <span>{isSelectionMode || selectedIds.size > 0 ? 'Mode Sélection' : 'Sélectionner'}</span>
-            </button>
-          )}
+          {isReadOnly ? (
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-300 text-xs font-semibold shadow-sm">
+              <Eye className="w-4 h-4 text-emerald-400" />
+              <span>Mode Consultation (Dirigeants)</span>
+            </div>
+          ) : (
+            <>
+              {joueurs.length > 0 && (
+                <button
+                  id="btn-selection-joueurs"
+                  onClick={() => {
+                    if (isSelectionMode && selectedIds.size === 0) {
+                      setIsSelectionMode(false);
+                    } else {
+                      setIsSelectionMode(true);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3.5 py-2.5 rounded-xl border transition-all ${
+                    isSelectionMode || selectedIds.size > 0
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-slate-800 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-750'
+                  }`}
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  <span>{isSelectionMode || selectedIds.size > 0 ? 'Mode Sélection' : 'Sélectionner'}</span>
+                </button>
+              )}
 
-          <button
-            id="btn-ajouter-nouveau-joueur"
-            onClick={handleOpenAdd}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-lg shadow-emerald-950/50 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Ajouter un Joueur
-          </button>
+              <button
+                id="btn-ajouter-nouveau-joueur"
+                onClick={handleOpenAdd}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-lg shadow-emerald-950/50 transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Ajouter un Joueur
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {/* Batch Action Toolbar when Selection is active */}
-      {(isSelectionMode || selectedIds.size > 0) && (
+      {!isReadOnly && (isSelectionMode || selectedIds.size > 0) && (
         <div className="bg-slate-900/95 border border-emerald-500/30 rounded-2xl p-3 sm:p-4 shadow-xl flex flex-wrap items-center justify-between gap-3 animate-in slide-in-from-top duration-200">
           <div className="flex items-center gap-3">
             <button
@@ -605,13 +617,15 @@ export const JoueursList: React.FC<JoueursListProps> = ({
           <p className="text-xs text-slate-400 max-w-sm mb-5">
             L'effectif est vide. Ajoutez vos premiers joueurs pour pouvoir composer vos matchs et suivre leurs statistiques.
           </p>
-          <button
-            onClick={handleOpenAdd}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-lg transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Créer un premier joueur
-          </button>
+          {!isReadOnly && (
+            <button
+              onClick={handleOpenAdd}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Créer un premier joueur
+            </button>
+          )}
         </div>
       )}
 
@@ -731,25 +745,27 @@ export const JoueursList: React.FC<JoueursListProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => handleOpenEdit(joueur, e)}
-                      className="p-1.5 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-                      title="Modifier les infos"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPlayerToDelete(joueur);
-                      }}
-                      className="p-1.5 text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors border border-rose-500/20 cursor-pointer"
-                      title="Supprimer ce joueur"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {!isReadOnly && (
+                    <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => handleOpenEdit(joueur, e)}
+                        className="p-1.5 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                        title="Modifier les infos"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPlayerToDelete(joueur);
+                        }}
+                        className="p-1.5 text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors border border-rose-500/20 cursor-pointer"
+                        title="Supprimer ce joueur"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Identity & Position */}

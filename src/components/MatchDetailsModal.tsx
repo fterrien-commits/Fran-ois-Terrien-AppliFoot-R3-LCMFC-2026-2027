@@ -19,6 +19,7 @@ import {
   Maximize2,
   Minimize2,
   Sparkles,
+  Eye,
 } from 'lucide-react';
 import {
   CompositionMatch,
@@ -54,6 +55,7 @@ interface MatchDetailsModalProps {
   onDeleteMatch?: (matchId: string) => void;
   onValidateMatch?: (match: Match, composition: CompositionMatch, feuilles: FeuilleMatchLigne[]) => void;
   onNavigateToStats?: () => void;
+  readOnly?: boolean;
 }
 
 const METEO_OPTIONS: MeteoType[] = [
@@ -78,6 +80,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
   onDeleteMatch,
   onValidateMatch,
   onNavigateToStats,
+  readOnly = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'tactique' | 'adverse' | 'feuille' | 'photos'>('tactique');
   const [matchData, setMatchData] = useState<Match>(match);
@@ -336,34 +339,41 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
-            <button
-              id={`btn-valider-infos-match-tab-${currentTabName}`}
-              type="button"
-              onClick={() => handleValidateAll(false)}
-              disabled={isValidating}
-              className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs sm:text-sm px-5 py-3 rounded-2xl shadow-xl shadow-emerald-950/60 border border-emerald-400/40 transition-all cursor-pointer"
-            >
-              <CheckCircle2 className="w-4 h-4 text-emerald-100" />
-              <span>Valider les informations du match</span>
-              <span className="text-[10px] bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-400/30 uppercase font-black">
-                {typeCfg.shortLabel}
-              </span>
-            </button>
-
-            {onNavigateToStats && (
+          {readOnly ? (
+            <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900 border border-slate-700/80 text-slate-300 text-xs font-semibold shadow-inner">
+              <Eye className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Mode Consultation : modifications et validation réservées à l'entraîneur (Mode Éditeur).</span>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
               <button
+                id={`btn-valider-infos-match-tab-${currentTabName}`}
                 type="button"
-                onClick={() => handleValidateAll(true)}
+                onClick={() => handleValidateAll(false)}
                 disabled={isValidating}
-                className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-bold text-xs sm:text-sm px-4 py-3 rounded-2xl border border-slate-700 hover:border-emerald-500/40 transition-all shadow-md cursor-pointer"
-                title="Valider et basculer directement vers le Tableau Annuel & Stats"
+                className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs sm:text-sm px-5 py-3 rounded-2xl shadow-xl shadow-emerald-950/60 border border-emerald-400/40 transition-all cursor-pointer"
               >
-                <Trophy className="w-4 h-4 text-amber-400" />
-                <span>Valider & Aller au Tableau Annuel</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-100" />
+                <span>Valider les informations du match</span>
+                <span className="text-[10px] bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-400/30 uppercase font-black">
+                  {typeCfg.shortLabel}
+                </span>
               </button>
-            )}
-          </div>
+
+              {onNavigateToStats && (
+                <button
+                  type="button"
+                  onClick={() => handleValidateAll(true)}
+                  disabled={isValidating}
+                  className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-bold text-xs sm:text-sm px-4 py-3 rounded-2xl border border-slate-700 hover:border-emerald-500/40 transition-all shadow-md cursor-pointer"
+                  title="Valider et basculer directement vers le Tableau Annuel & Stats"
+                >
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span>Valider & Aller au Tableau Annuel</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -463,24 +473,31 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
               </button>
             )}
 
-            {/* Quick header validation button */}
-            <button
-              id="btn-quick-valider-match-header"
-              type="button"
-              onClick={() => handleValidateAll(false)}
-              disabled={isValidating}
-              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
-                matchData.valide
-                  ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/30'
-                  : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-950/40'
-              }`}
-              title="Valider et sauvegarder toutes les informations du match et les compiler dans le Tableau Annuel"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">
-                {matchData.valide ? 'Validé ✓' : 'Valider le match'}
-              </span>
-            </button>
+            {/* Quick header validation button or ReadOnly badge */}
+            {readOnly ? (
+              <div className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300">
+                <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Mode Consultation</span>
+              </div>
+            ) : (
+              <button
+                id="btn-quick-valider-match-header"
+                type="button"
+                onClick={() => handleValidateAll(false)}
+                disabled={isValidating}
+                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
+                  matchData.valide
+                    ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/30'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-950/40'
+                }`}
+                title="Valider et sauvegarder toutes les informations du match et les compiler dans le Tableau Annuel"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">
+                  {matchData.valide ? 'Validé ✓' : 'Valider le match'}
+                </span>
+              </button>
+            )}
 
             <button
               onClick={() => setActiveTab('photos')}
@@ -495,18 +512,20 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
               <span>{matchData.photos?.length || 0}/2 photo{matchData.photos && matchData.photos.length > 1 ? 's' : ''}</span>
             </button>
 
-            <button
-              onClick={() => setIsEditingInfo(!isEditingInfo)}
-              className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-colors border border-slate-700/80"
-              title="Modifier les informations du match"
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
+            {!readOnly && (
+              <button
+                onClick={() => setIsEditingInfo(!isEditingInfo)}
+                className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-colors border border-slate-700/80 cursor-pointer"
+                title="Modifier les informations du match"
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
+            )}
 
-            {onDeleteMatch && (
+            {!readOnly && onDeleteMatch && (
               <button
                 onClick={() => setIsConfirmDeleteOpen(true)}
-                className="p-2 text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 rounded-xl transition-colors border border-rose-500/20"
+                className="p-2 text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 rounded-xl transition-colors border border-rose-500/20 cursor-pointer"
                 title="Supprimer ce match"
               >
                 <Trash2 className="w-4 h-4" />
@@ -792,6 +811,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                 joueurs={joueurs}
                 onUpdateComposition={onUpdateComposition}
                 onUpdateFeuilleLigne={handleUpdateFeuilleLigne}
+                readOnly={readOnly}
               />
               {renderTabBottomValidationCard('notre_systeme')}
             </div>
@@ -799,6 +819,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
             <div className="flex flex-col">
               <PitchAdverseTactique
                 match={matchData}
+                readOnly={readOnly}
                 onSaveScouting={(scouting) => {
                   const updatedMatch = {
                     ...matchData,
@@ -1034,13 +1055,14 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                 <td className="py-2 px-2 text-center">
                                   <select
                                     id={`select-role-${joueur.id}`}
+                                    disabled={readOnly}
                                     value={statut}
                                     onChange={(e) =>
                                       handleSetPlayerStatut(joueur.id, e.target.value as StatutMatchJoueur)
                                     }
-                                    className={`w-full max-w-[155px] px-2 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer outline-none shadow-sm ${
-                                      STATUTS_MATCH_CONFIG[statut].selectClass
-                                    }`}
+                                    className={`w-full max-w-[155px] px-2 py-1.5 rounded-lg text-xs font-bold border transition-colors outline-none shadow-sm ${
+                                      readOnly ? 'cursor-default opacity-85' : 'cursor-pointer'
+                                    } ${STATUTS_MATCH_CONFIG[statut].selectClass}`}
                                   >
                                     <option value="titulaire" className="bg-slate-900 text-emerald-400 font-semibold">
                                       🟢 Titulaire
@@ -1078,7 +1100,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                     type="number"
                                     min="0"
                                     max="120"
-                                    disabled={!isActif}
+                                    disabled={readOnly || !isActif}
                                     value={ligne.minutesJouees}
                                     onChange={(e) =>
                                       handleUpdateFeuilleLigne({
@@ -1087,7 +1109,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                       })
                                     }
                                     className={`w-14 bg-slate-900 border border-slate-700 text-white rounded px-1.5 py-1 text-center font-mono text-xs focus:ring-1 focus:ring-emerald-500 ${
-                                      !isActif ? 'opacity-30 cursor-not-allowed bg-slate-950 text-slate-600' : ''
+                                      !isActif || readOnly ? 'opacity-40 cursor-default bg-slate-950 text-slate-400' : ''
                                     }`}
                                   />
                                 </td>
@@ -1098,7 +1120,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                     type="number"
                                     min="0"
                                     max="10"
-                                    disabled={!isActif}
+                                    disabled={readOnly || !isActif}
                                     value={ligne.buts}
                                     onChange={(e) =>
                                       handleUpdateFeuilleLigne({
@@ -1107,7 +1129,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                       })
                                     }
                                     className={`w-12 bg-slate-900 border border-slate-700 text-amber-300 font-bold rounded px-1.5 py-1 text-center text-xs focus:ring-1 focus:ring-emerald-500 ${
-                                      !isActif ? 'opacity-30 cursor-not-allowed bg-slate-950 text-slate-600' : ''
+                                      !isActif || readOnly ? 'opacity-40 cursor-default bg-slate-950 text-slate-400' : ''
                                     }`}
                                   />
                                 </td>
@@ -1118,7 +1140,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                     type="number"
                                     min="0"
                                     max="10"
-                                    disabled={!isActif}
+                                    disabled={readOnly || !isActif}
                                     value={ligne.passesDecisives}
                                     onChange={(e) =>
                                       handleUpdateFeuilleLigne({
@@ -1127,7 +1149,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                       })
                                     }
                                     className={`w-12 bg-slate-900 border border-slate-700 text-blue-300 font-bold rounded px-1.5 py-1 text-center text-xs focus:ring-1 focus:ring-emerald-500 ${
-                                      !isActif ? 'opacity-30 cursor-not-allowed bg-slate-950 text-slate-600' : ''
+                                      !isActif || readOnly ? 'opacity-40 cursor-default bg-slate-950 text-slate-400' : ''
                                     }`}
                                   />
                                 </td>
@@ -1138,7 +1160,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                     type="number"
                                     min="0"
                                     max="2"
-                                    disabled={!isActif}
+                                    disabled={readOnly || !isActif}
                                     value={ligne.cartonsJaunes}
                                     onChange={(e) =>
                                       handleUpdateFeuilleLigne({
@@ -1147,7 +1169,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                       })
                                     }
                                     className={`w-12 bg-slate-900 border border-slate-700 text-yellow-300 font-bold rounded px-1.5 py-1 text-center text-xs focus:ring-1 focus:ring-emerald-500 ${
-                                      !isActif ? 'opacity-30 cursor-not-allowed bg-slate-950 text-slate-600' : ''
+                                      !isActif || readOnly ? 'opacity-40 cursor-default bg-slate-950 text-slate-400' : ''
                                     }`}
                                   />
                                 </td>
@@ -1158,7 +1180,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                     type="number"
                                     min="0"
                                     max="1"
-                                    disabled={!isActif}
+                                    disabled={readOnly || !isActif}
                                     value={ligne.cartonsRouges}
                                     onChange={(e) =>
                                       handleUpdateFeuilleLigne({
@@ -1167,7 +1189,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                       })
                                     }
                                     className={`w-12 bg-slate-900 border border-slate-700 text-red-400 font-bold rounded px-1.5 py-1 text-center text-xs focus:ring-1 focus:ring-emerald-500 ${
-                                      !isActif ? 'opacity-30 cursor-not-allowed bg-slate-950 text-slate-600' : ''
+                                      !isActif || readOnly ? 'opacity-40 cursor-default bg-slate-950 text-slate-400' : ''
                                     }`}
                                   />
                                 </td>
@@ -1181,6 +1203,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                         min="1"
                                         max="10"
                                         step="0.5"
+                                        disabled={readOnly}
                                         placeholder="-"
                                         value={ligne.note !== null && ligne.note !== undefined ? ligne.note : ''}
                                         onChange={(e) => {
@@ -1190,7 +1213,9 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                                             note: val,
                                           });
                                         }}
-                                        className="w-14 bg-slate-900 border border-slate-700 text-white rounded px-1.5 py-1 text-center font-bold text-xs focus:ring-1 focus:ring-emerald-500"
+                                        className={`w-14 bg-slate-900 border border-slate-700 text-white rounded px-1.5 py-1 text-center font-bold text-xs focus:ring-1 focus:ring-emerald-500 ${
+                                          readOnly ? 'cursor-default opacity-85' : ''
+                                        }`}
                                       />
                                       <span
                                         className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border ${noteObj.bg} ${noteObj.text} ${noteObj.border}`}
@@ -1232,6 +1257,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                 <MatchPhotosManager
                   photos={matchData.photos || []}
                   maxPhotos={2}
+                  readOnly={readOnly}
                   onChange={(newPhotos) => {
                     const updated = { ...matchData, photos: newPhotos };
                     setMatchData(updated);
@@ -1278,44 +1304,60 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            <button
-              id="btn-valider-informations-match-dock"
-              type="button"
-              onClick={() => handleValidateAll(false)}
-              disabled={isValidating}
-              className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-950/60 border border-emerald-400/40 transition-all cursor-pointer"
-            >
-              <CheckCircle2 className="w-4 h-4 text-emerald-100" />
-              <span>Valider les informations du match</span>
-              <span className="hidden lg:inline-flex text-[10px] bg-emerald-900/80 px-1.5 py-0.5 rounded border border-emerald-400/30 font-bold uppercase tracking-wider">
-                {typeCfg.shortLabel}
-              </span>
-            </button>
-
-            {onNavigateToStats && (
+          {readOnly ? (
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 text-xs font-semibold">
+                <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Mode Consultation (Dirigeants)</span>
+              </div>
               <button
-                id="btn-valider-et-aller-stats-dock"
                 type="button"
-                onClick={() => handleValidateAll(true)}
-                disabled={isValidating}
-                className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-750 active:scale-95 text-white font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-700 hover:border-emerald-500/30 transition-all shadow-md cursor-pointer"
-                title="Valider et basculer immédiatement vers le Tableau Annuel & Stats"
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors cursor-pointer border border-slate-700"
               >
-                <Trophy className="w-4 h-4 text-amber-400" />
-                <span className="hidden sm:inline">Valider & Tableau Annuel</span>
-                <span className="sm:hidden">Stats</span>
+                Fermer
               </button>
-            )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                id="btn-valider-informations-match-dock"
+                type="button"
+                onClick={() => handleValidateAll(false)}
+                disabled={isValidating}
+                className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-950/60 border border-emerald-400/40 transition-all cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-100" />
+                <span>Valider les informations du match</span>
+                <span className="hidden lg:inline-flex text-[10px] bg-emerald-900/80 px-1.5 py-0.5 rounded border border-emerald-400/30 font-bold uppercase tracking-wider">
+                  {typeCfg.shortLabel}
+                </span>
+              </button>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-2 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
-            >
-              Fermer
-            </button>
-          </div>
+              {onNavigateToStats && (
+                <button
+                  id="btn-valider-et-aller-stats-dock"
+                  type="button"
+                  onClick={() => handleValidateAll(true)}
+                  disabled={isValidating}
+                  className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-750 active:scale-95 text-white font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-700 hover:border-emerald-500/30 transition-all shadow-md cursor-pointer"
+                  title="Valider et basculer immédiatement vers le Tableau Annuel & Stats"
+                >
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span className="hidden sm:inline">Valider & Tableau Annuel</span>
+                  <span className="sm:hidden">Stats</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-2 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
