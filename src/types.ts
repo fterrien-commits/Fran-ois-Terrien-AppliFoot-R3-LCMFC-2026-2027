@@ -68,11 +68,48 @@ export interface JoueurAdverseTactique {
   y: number; // 0 à 100% de la hauteur du terrain
 }
 
+export interface CaracteristiqueEquipeAdverseConfig {
+  id: string;
+  label: string;
+  categorie:
+    | 'Profil & Âge'
+    | 'Physique & Vitesse'
+    | 'Style & Animation'
+    | 'Organisation & Bloc'
+    | 'Mental & Cohésion'
+    | 'Coups de pied arrêtés';
+  icon: string;
+  description: string;
+}
+
+export const CARACTERISTIQUES_EQUIPE_ADVERSE: CaracteristiqueEquipeAdverseConfig[] = [
+  { id: 'jeune', label: 'Jeune', categorie: 'Profil & Âge', icon: '🌱', description: "Effectif à forte dominante de jeunes joueurs, fougueux mais pouvant manquer de maturité." },
+  { id: 'experimente', label: 'Expérimentée', categorie: 'Profil & Âge', icon: '🧠', description: "Joueurs d'expérience, habitués au niveau R3, savent gérer le tempo et les fautes tactiques." },
+  { id: 'athletique', label: 'Athlétique', categorie: 'Physique & Vitesse', icon: '🏋️', description: "Gabarits imposants, forte densité dans les duels, avantage sur les contacts physiques." },
+  { id: 'agressive', label: 'Agressive', categorie: 'Physique & Vitesse', icon: '🥊', description: "Engagement intense et limite, fautes répétées pour casser le rythme." },
+  { id: 'technique', label: 'Technique', categorie: 'Style & Animation', icon: '✨', description: "Aisance technique collective, contrôle de balle propre et jeu en déviations." },
+  { id: 'rapide', label: 'Rapide', categorie: 'Physique & Vitesse', icon: '⚡', description: "Vitesse de pointe élevée sur les côtés et en attaque, menace constante en profondeur." },
+  { id: 'joueuse', label: 'Joueuse', categorie: 'Style & Animation', icon: '⚽', description: "Privilégie la relance courte et la possession, prend des risques à la sortie de balle." },
+  { id: 'attentiste', label: 'Attentiste', categorie: 'Style & Animation', icon: '⏳', description: "Patiente, laisse délibérément l'initiative pour piquer sur une maladresse." },
+  { id: 'tactique_plus', label: 'Tactique +', categorie: 'Organisation & Bloc', icon: '📐', description: "Très bien organisée, coulissement rigoureux des lignes, difficile à déséquilibrer." },
+  { id: 'solidaire', label: 'Solidaire', categorie: 'Mental & Cohésion', icon: '🤝', description: "Forte cohésion de groupe, compensations défensives et abnégation collective." },
+  { id: 'febrile', label: 'Fébrile', categorie: 'Mental & Cohésion', icon: '⚠️', description: "Sujette à la panique sous notre pressing, multiplie les approximations si bousculée." },
+  { id: 'fragile_mentalement', label: 'Fragile mentalement', categorie: 'Mental & Cohésion', icon: '💔', description: "Baisse rapidement les bras en cas d'ouverture du score adverse ou de faits de jeu contraires." },
+  { id: 'inconstante', label: 'Inconstante', categorie: 'Style & Animation', icon: '📉', description: "Irrégularité criante, capable d'éclairs de génie comme de gros passages à vide." },
+  { id: 'contre_attaquante', label: 'Contre-attaquante', categorie: 'Organisation & Bloc', icon: '🏹', description: "Verticalité immédiate à la récupération, recherche rapide des espaces dans notre dos." },
+  { id: 'bloc_bas', label: 'Bloc bas', categorie: 'Organisation & Bloc', icon: '🛡️', description: "Bloc défensif très regroupé devant ses 16 mètres, refuse de laisser de la profondeur." },
+  { id: 'pressing_important', label: 'Pressing important', categorie: 'Organisation & Bloc', icon: '🔥', description: "Harcèlement haut sur nos premières relances, cherche à récupérer près de notre but." },
+  { id: 'fort_cpa', label: 'Fort coup de pied arrêté', categorie: 'Coups de pied arrêtés', icon: '🎯', description: "Danger majeur sur coups francs, corners et touches longues. Bons tireurs et bon jeu de tête." },
+  { id: 'faible_cpa', label: 'Faible coup de pied arrêté', categorie: 'Coups de pied arrêtés', icon: '❌', description: "Marquage et alignement flottants sur CPA défensifs. Opportunités nettes de marquer." },
+  { id: 'adaptabilite', label: 'Adaptabilité', categorie: 'Organisation & Bloc', icon: '🔄', description: "Capacité à changer de module tactique en cours de match pour contrer notre stratégie." },
+];
+
 export interface ScoutingAdverse {
   matchId: string;
   systeme: string;
   joueurs: JoueurAdverseTactique[];
   consignesRetour?: string; // Consignes générales pour anticiper le match retour
+  caracteristiquesEquipe?: string[]; // IDs des caractéristiques cochées de l'équipe adverse
 }
 
 export type TypeMatch =

@@ -20,6 +20,12 @@ import {
   UserCheck,
   X,
   Zap,
+  CheckSquare,
+  Square,
+  Search,
+  Eye,
+  ListChecks,
+  Sliders,
 } from 'lucide-react';
 import {
   JoueurAdverseTactique,
@@ -27,6 +33,8 @@ import {
   NiveauJoueurAdverse,
   ScoutingAdverse,
   SystemeTactique,
+  CARACTERISTIQUES_EQUIPE_ADVERSE,
+  CaracteristiqueEquipeAdverseConfig,
 } from '../types';
 import { FORMATION_PRESETS } from '../mockData';
 
@@ -84,12 +92,12 @@ export const NIVEAU_CONFIG: Record<
   'fort': {
     label: 'Bon joueur',
     shortLabel: 'BON JOUEUR',
-    colorBadge: 'bg-emerald-600 text-white border-emerald-500 shadow-md font-bold',
-    borderRing: 'ring-4 ring-emerald-500 ring-offset-2 ring-offset-slate-900',
-    bgPill: 'bg-emerald-600/15 border-emerald-500/40 text-emerald-400',
-    textPill: 'text-emerald-400',
-    barColor: 'bg-emerald-600',
-    hex: '#16a34a',
+    colorBadge: 'bg-emerald-800 text-white border-emerald-600 shadow-md font-bold',
+    borderRing: 'ring-4 ring-emerald-700 ring-offset-2 ring-offset-slate-900',
+    bgPill: 'bg-emerald-900/35 border-emerald-700/50 text-emerald-300',
+    textPill: 'text-emerald-300',
+    barColor: 'bg-emerald-800',
+    hex: '#15803d',
     icon: '🟢',
     description: 'Très bon niveau technique ou physique. Réduire ses espaces et limiter ses relances.',
   },
@@ -234,6 +242,7 @@ export function generateDefaultScouting(match: Match): ScoutingAdverse {
     systeme: sysKey,
     joueurs,
     consignesRetour: `Plan tactique match retour contre ${match.adversaire} : Isoler leur numéro 9 (danger permanent), presser haut le côté gauche de leur défense (talon d'Achille identifié), et exploiter les transitions rapides sur les ailes.`,
+    caracteristiquesEquipe: ['athletique', 'contre_attaquante', 'bloc_bas'],
   };
 }
 
@@ -248,11 +257,16 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
   onSaveScouting,
   readOnly = false,
 }) => {
-  // Initialize scouting state
+  // Initialize scouting state with characteristics
   const [scouting, setScouting] = useState<ScoutingAdverse>(() => {
-    return match.scoutingAdverse && match.scoutingAdverse.joueurs?.length === 11
-      ? match.scoutingAdverse
-      : generateDefaultScouting(match);
+    const base =
+      match.scoutingAdverse && match.scoutingAdverse.joueurs?.length === 11
+        ? match.scoutingAdverse
+        : generateDefaultScouting(match);
+    return {
+      ...base,
+      caracteristiquesEquipe: base.caracteristiquesEquipe || ['athletique', 'contre_attaquante', 'bloc_bas'],
+    };
   });
 
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -261,14 +275,20 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
   const [isDragging, setIsDragging] = useState<string | null>(null);
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'editor' | 'synthese'>('editor');
+  const [activeTab, setActiveTab] = useState<'editor' | 'caracteristiques' | 'synthese'>('editor');
+  const [caracCategoryFilter, setCaracCategoryFilter] = useState<string>('all');
+  const [caracSearchTerm, setCaracSearchTerm] = useState<string>('');
 
   const pitchRef = useRef<HTMLDivElement>(null);
 
   // Sync when match changes
   useEffect(() => {
     if (match.scoutingAdverse && match.scoutingAdverse.joueurs?.length === 11) {
-      setScouting(match.scoutingAdverse);
+      setScouting({
+        ...match.scoutingAdverse,
+        caracteristiquesEquipe:
+          match.scoutingAdverse.caracteristiquesEquipe || ['athletique', 'contre_attaquante', 'bloc_bas'],
+      });
     } else {
       const generated = generateDefaultScouting(match);
       setScouting(generated);
@@ -454,6 +474,45 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
     });
   };
 
+  // Opponent team characteristics management (19 tactiques)
+  const toggleCaracteristiqueEquipe = (caracId: string) => {
+    if (readOnly) return;
+    const currentList = scouting.caracteristiquesEquipe || [];
+    const exists = currentList.includes(caracId);
+    const nextList = exists
+      ? currentList.filter((id) => id !== caracId)
+      : [...currentList, caracId];
+    updateScouting({
+      ...scouting,
+      caracteristiquesEquipe: nextList,
+    });
+  };
+
+  const handleSelectAllCaracteristiques = () => {
+    if (readOnly) return;
+    const allIds = CARACTERISTIQUES_EQUIPE_ADVERSE.map((c) => c.id);
+    updateScouting({
+      ...scouting,
+      caracteristiquesEquipe: allIds,
+    });
+  };
+
+  const handleClearAllCaracteristiques = () => {
+    if (readOnly) return;
+    updateScouting({
+      ...scouting,
+      caracteristiquesEquipe: [],
+    });
+  };
+
+  const handleResetDefaultCaracteristiques = () => {
+    if (readOnly) return;
+    updateScouting({
+      ...scouting,
+      caracteristiquesEquipe: ['athletique', 'contre_attaquante', 'bloc_bas'],
+    });
+  };
+
   // Threat count breakdown
   const statsThreat = {
     'faible +': scouting.joueurs.filter((j) => j.indication === 'faible +'),
@@ -545,7 +604,7 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
       const nCfg = NIVEAU_CONFIG[j.indication];
       const strokeColor = nCfg.hex;
 
-      ctx.fillStyle = '#0f172a';
+      ctx.fillStyle = j.indication === 'fort' ? '#064e3b' : '#0f172a';
       ctx.beginPath();
       ctx.arc(px, py, 26, 0, Math.PI * 2);
       ctx.fill();
@@ -807,7 +866,17 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
 
                   {/* Jersey Token Circle - Clean, High Contrast with Number (NO PHOTO) */}
                   <div
-                    className={`relative w-12 h-12 sm:w-13 sm:h-13 rounded-full overflow-hidden shadow-xl bg-gradient-to-b from-slate-800 to-slate-950 flex flex-col items-center justify-center transition-all ${
+                    className={`relative w-12 h-12 sm:w-13 sm:h-13 rounded-full overflow-hidden shadow-xl flex flex-col items-center justify-center transition-all ${
+                      joueur.indication === 'fort'
+                        ? 'bg-gradient-to-b from-emerald-800 via-emerald-950 to-slate-950 border-2 border-emerald-500 shadow-emerald-950/80'
+                        : joueur.indication === 'fort+'
+                        ? 'bg-gradient-to-b from-blue-800 via-blue-950 to-slate-950 border-2 border-blue-500 shadow-blue-950/70'
+                        : joueur.indication === 'faible +'
+                        ? 'bg-gradient-to-b from-red-900 via-red-950 to-slate-950 border-2 border-red-500 shadow-red-950/70'
+                        : joueur.indication === 'faible'
+                        ? 'bg-gradient-to-b from-orange-900 via-orange-950 to-slate-950 border-2 border-orange-500 shadow-orange-950/70'
+                        : 'bg-gradient-to-b from-slate-800 to-slate-950 border-2 border-yellow-500/50'
+                    } ${
                       isSelected
                         ? 'ring-4 ring-white ring-offset-2 ring-offset-slate-950 scale-105 shadow-2xl'
                         : cfg.borderRing
@@ -865,6 +934,7 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
           {/* Tabs for Sidebar: Player Edition vs Return Match Strategy */}
           <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-bold shrink-0">
             <button
+              type="button"
               onClick={() => setActiveTab('editor')}
               className={`flex-1 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                 activeTab === 'editor'
@@ -873,9 +943,22 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
               }`}
             >
               <Target className="w-3.5 h-3.5" />
-              <span>Joueur Adverse N°{selectedPlayer.numero}</span>
+              <span>Joueur N°{selectedPlayer.numero}</span>
             </button>
             <button
+              type="button"
+              onClick={() => setActiveTab('caracteristiques')}
+              className={`flex-1 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'caracteristiques'
+                  ? 'bg-red-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <ListChecks className="w-3.5 h-3.5" />
+              <span>Traits ({(scouting.caracteristiquesEquipe || []).length})</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('synthese')}
               className={`flex-1 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                 activeTab === 'synthese'
@@ -884,7 +967,7 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
               }`}
             >
               <Zap className="w-3.5 h-3.5" />
-              <span>Plan Match Retour</span>
+              <span>Plan Match</span>
             </button>
           </div>
 
@@ -1145,6 +1228,120 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
                 />
               </div>
             </div>
+          ) : activeTab === 'caracteristiques' ? (
+            /* Sidebar Panel : Opponent Team Characteristics Checklist (19 traits) */
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 shadow-md">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                <div>
+                  <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                    <ListChecks className="w-4 h-4 text-amber-400" />
+                    Caractéristiques de l'équipe
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {scouting.caracteristiquesEquipe?.length || 0} sur 19 cochée{(scouting.caracteristiquesEquipe || []).length > 1 ? 's' : ''}
+                  </p>
+                </div>
+                {!readOnly && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllCaracteristiques}
+                      className="text-[10px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-colors cursor-pointer"
+                    >
+                      Tout
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearAllCaracteristiques}
+                      className="text-[10px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold transition-colors cursor-pointer"
+                    >
+                      Aucun
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {readOnly && (
+                <div className="text-[10.5px] p-2 bg-slate-950/90 rounded-xl border border-slate-800 text-slate-400 flex items-center gap-1.5">
+                  <Eye className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Mode Consultation (Dirigeants) : Seuls les entraîneurs peuvent modifier ces cases.</span>
+                </div>
+              )}
+
+              {/* Quick search input */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  value={caracSearchTerm}
+                  onChange={(e) => setCaracSearchTerm(e.target.value)}
+                  placeholder="Rechercher (ex: pressing, rapide, bloc bas...)"
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-red-500"
+                />
+              </div>
+
+              {/* 19 Characteristics quick interactive checklist */}
+              <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+                {CARACTERISTIQUES_EQUIPE_ADVERSE.filter(
+                  (c) =>
+                    !caracSearchTerm ||
+                    c.label.toLowerCase().includes(caracSearchTerm.toLowerCase()) ||
+                    c.categorie.toLowerCase().includes(caracSearchTerm.toLowerCase()) ||
+                    c.description.toLowerCase().includes(caracSearchTerm.toLowerCase())
+                ).map((carac) => {
+                  const isChecked = (scouting.caracteristiquesEquipe || []).includes(carac.id);
+                  return (
+                    <div
+                      key={carac.id}
+                      onClick={() => toggleCaracteristiqueEquipe(carac.id)}
+                      className={`p-2 rounded-xl border transition-all flex items-start gap-2.5 ${
+                        readOnly ? 'cursor-default' : 'cursor-pointer hover:border-slate-600'
+                      } ${
+                        isChecked
+                          ? 'bg-red-950/30 border-red-500/50 text-white shadow-xs'
+                          : 'bg-slate-950/70 border-slate-800/80 text-slate-300 hover:bg-slate-850'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        disabled={readOnly}
+                        className={`mt-0.5 shrink-0 transition-transform ${
+                          readOnly ? 'cursor-default' : 'cursor-pointer active:scale-90'
+                        }`}
+                      >
+                        {isChecked ? (
+                          <CheckSquare className="w-4 h-4 text-red-500" />
+                        ) : (
+                          <Square className="w-4 h-4 text-slate-600" />
+                        )}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm shrink-0">{carac.icon}</span>
+                          <span className={`text-xs font-extrabold ${isChecked ? 'text-white' : 'text-slate-300'}`}>
+                            {carac.label}
+                          </span>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-semibold">
+                            {carac.categorie}
+                          </span>
+                        </div>
+                        <p className="text-[10.5px] text-slate-400 leading-snug mt-0.5">
+                          {carac.description}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Jump to full table button */}
+              <a
+                href="#tableau-caracteristiques-adverse"
+                className="text-center text-xs font-bold text-red-400 hover:text-red-300 py-1.5 bg-red-950/30 rounded-xl border border-red-500/20 transition-colors"
+              >
+                Voir le Grand Tableau complet ci-dessous ↓
+              </a>
+            </div>
           ) : (
             /* Return Match Plan & Synthesis Card */
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3.5 shadow-md">
@@ -1156,6 +1353,45 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
                 <p className="text-xs text-slate-400 mt-0.5">
                   Consignes tactiques synthétisées pour renverser ou dominer {match.adversaire}.
                 </p>
+              </div>
+
+              {/* Opponent Team Checked Characteristics in Synthesis */}
+              <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <ListChecks className="w-3.5 h-3.5" />
+                    Profil collectif ({(scouting.caracteristiquesEquipe || []).length}/19)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('caracteristiques')}
+                    className="text-[10px] text-slate-400 hover:text-white underline cursor-pointer"
+                  >
+                    Modifier
+                  </button>
+                </div>
+                {(scouting.caracteristiquesEquipe || []).length === 0 ? (
+                  <p className="text-slate-500 italic text-[11px]">
+                    Aucune caractéristique collective cochée.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {(scouting.caracteristiquesEquipe || []).map((id) => {
+                      const carac = CARACTERISTIQUES_EQUIPE_ADVERSE.find((c) => c.id === id);
+                      if (!carac) return null;
+                      return (
+                        <span
+                          key={id}
+                          className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-lg bg-slate-800 text-amber-300 border border-amber-500/30"
+                          title={carac.description}
+                        >
+                          <span>{carac.icon}</span>
+                          <span>{carac.label}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Danger list: Très bon joueur & Bon joueur */}
@@ -1256,6 +1492,291 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
         </div>
       </div>
 
+      {/* TABLEAU DES CARACTÉRISTIQUES DE L'ÉQUIPE ADVERSE (19 critères tactiques) */}
+      <div
+        id="tableau-caracteristiques-adverse"
+        className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 flex flex-col gap-5 shadow-xl scroll-mt-6"
+      >
+        {/* Header & Meta */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-600 via-rose-700 to-amber-600 flex items-center justify-center text-white shadow-lg shrink-0">
+              <ListChecks className="w-6 h-6 stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-black uppercase tracking-wider text-red-500">
+                  Scouting Collectif & Profil de Jeu
+                </span>
+                <span className="text-slate-600">•</span>
+                <span className="text-xs font-bold text-amber-400">
+                  19 caractéristiques tactiques
+                </span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-extrabold text-white">
+                Tableau des Caractéristiques de l'Équipe Adverse ({match.adversaire})
+              </h3>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Active count badge */}
+            <div className="px-3.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700/80 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-extrabold text-white">
+                {(scouting.caracteristiquesEquipe || []).length} / {CARACTERISTIQUES_EQUIPE_ADVERSE.length} cochée{(scouting.caracteristiquesEquipe || []).length > 1 ? 's' : ''}
+              </span>
+            </div>
+
+            {/* ReadOnly or Actions */}
+            {readOnly ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs font-bold text-slate-300">
+                <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Mode Consultation (Dirigeants)</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleSelectAllCaracteristiques}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                >
+                  Tout cocher
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearAllCaracteristiques}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 border border-slate-700 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                >
+                  Tout décocher
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetDefaultCaracteristiques}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                  title="Réinitialiser au profil par défaut (Athlétique, Contre-attaquante, Bloc bas)"
+                >
+                  Défaut
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Filters bar: Search + Category Pills */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Categories Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full text-xs font-bold">
+            {[
+              { id: 'all', label: 'Toutes (19)' },
+              { id: 'Profil & Âge', label: 'Profil & Âge' },
+              { id: 'Physique & Vitesse', label: 'Physique & Vitesse' },
+              { id: 'Style & Animation', label: 'Style & Animation' },
+              { id: 'Organisation & Bloc', label: 'Organisation & Bloc' },
+              { id: 'Mental & Cohésion', label: 'Mental & Cohésion' },
+              { id: 'Coups de pied arrêtés', label: 'CPA' },
+            ].map((cat) => {
+              const isActive = caracCategoryFilter === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setCaracCategoryFilter(cat.id)}
+                  className={`px-3 py-1.5 rounded-xl border whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                    isActive
+                      ? 'bg-red-600 text-white border-red-500 shadow-md font-extrabold'
+                      : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search box */}
+          <div className="relative min-w-[220px] sm:w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              value={caracSearchTerm}
+              onChange={(e) => setCaracSearchTerm(e.target.value)}
+              placeholder="Rechercher une caractéristique..."
+              className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+          </div>
+        </div>
+
+        {/* TABLE VIEW OF CHARACTERISTICS */}
+        <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60 shadow-inner">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-slate-800 bg-slate-950 text-slate-400 uppercase tracking-wider text-[10.5px] font-black">
+                <th className="py-3 px-4 w-12 text-center">Coché</th>
+                <th className="py-3 px-4 min-w-[180px]">Caractéristique</th>
+                <th className="py-3 px-4 min-w-[150px]">Catégorie</th>
+                <th className="py-3 px-4 min-w-[320px]">Impact Tactique & Anticipation Match Retour</th>
+                <th className="py-3 px-4 w-28 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/70">
+              {CARACTERISTIQUES_EQUIPE_ADVERSE.filter((c) => {
+                const matchCategory =
+                  caracCategoryFilter === 'all' || c.categorie === caracCategoryFilter;
+                const matchSearch =
+                  !caracSearchTerm ||
+                  c.label.toLowerCase().includes(caracSearchTerm.toLowerCase()) ||
+                  c.categorie.toLowerCase().includes(caracSearchTerm.toLowerCase()) ||
+                  c.description.toLowerCase().includes(caracSearchTerm.toLowerCase());
+                return matchCategory && matchSearch;
+              }).map((carac) => {
+                const isChecked = (scouting.caracteristiquesEquipe || []).includes(carac.id);
+
+                return (
+                  <tr
+                    key={carac.id}
+                    onClick={() => toggleCaracteristiqueEquipe(carac.id)}
+                    className={`transition-colors group ${
+                      readOnly ? 'cursor-default' : 'cursor-pointer'
+                    } ${
+                      isChecked
+                        ? 'bg-red-950/20 hover:bg-red-950/30'
+                        : 'hover:bg-slate-900/60'
+                    }`}
+                  >
+                    {/* Checkbox cell */}
+                    <td className="py-3 px-4 text-center">
+                      <button
+                        type="button"
+                        disabled={readOnly}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCaracteristiqueEquipe(carac.id);
+                        }}
+                        className={`inline-flex items-center justify-center w-6 h-6 rounded-lg transition-transform ${
+                          readOnly ? 'cursor-default' : 'cursor-pointer active:scale-90 hover:scale-110'
+                        } ${
+                          isChecked
+                            ? 'bg-red-600 text-white shadow-sm shadow-red-950'
+                            : 'bg-slate-850 border border-slate-700 text-transparent hover:border-slate-500'
+                        }`}
+                        title={isChecked ? 'Décocher' : 'Cocher cette caractéristique'}
+                      >
+                        {isChecked ? (
+                          <Check className="w-4 h-4 stroke-[3]" />
+                        ) : (
+                          <span className="w-2 h-2 rounded-xs bg-transparent group-hover:bg-slate-600" />
+                        )}
+                      </button>
+                    </td>
+
+                    {/* Characteristic Label & Icon */}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl shrink-0 p-1 bg-slate-900 rounded-lg border border-slate-800 shadow-xs">
+                          {carac.icon}
+                        </span>
+                        <div>
+                          <span
+                            className={`font-black text-sm block leading-tight ${
+                              isChecked ? 'text-white' : 'text-slate-300'
+                            }`}
+                          >
+                            {carac.label}
+                          </span>
+                          <span className="text-[10px] text-slate-500">
+                            ID: #{carac.id}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Category */}
+                    <td className="py-3 px-4">
+                      <span
+                        className={`inline-block px-2.5 py-0.5 rounded-lg text-[10.5px] font-extrabold border ${
+                          carac.categorie === 'Profil & Âge'
+                            ? 'bg-purple-950/40 text-purple-300 border-purple-500/30'
+                            : carac.categorie === 'Physique & Vitesse'
+                            ? 'bg-amber-950/40 text-amber-300 border-amber-500/30'
+                            : carac.categorie === 'Style & Animation'
+                            ? 'bg-blue-950/40 text-blue-300 border-blue-500/30'
+                            : carac.categorie === 'Organisation & Bloc'
+                            ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/30'
+                            : carac.categorie === 'Mental & Cohésion'
+                            ? 'bg-rose-950/40 text-rose-300 border-rose-500/30'
+                            : 'bg-indigo-950/40 text-indigo-300 border-indigo-500/30'
+                        }`}
+                      >
+                        {carac.categorie}
+                      </span>
+                    </td>
+
+                    {/* Tactical description */}
+                    <td className="py-3 px-4">
+                      <p
+                        className={`text-xs leading-relaxed ${
+                          isChecked ? 'text-slate-200 font-medium' : 'text-slate-400'
+                        }`}
+                      >
+                        {carac.description}
+                      </p>
+                    </td>
+
+                    {/* Toggle button */}
+                    <td className="py-3 px-4 text-center">
+                      <button
+                        type="button"
+                        disabled={readOnly}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCaracteristiqueEquipe(carac.id);
+                        }}
+                        className={`px-3 py-1 rounded-xl text-xs font-black transition-all ${
+                          readOnly
+                            ? 'opacity-60 cursor-default bg-slate-900 text-slate-500 border border-slate-800'
+                            : isChecked
+                            ? 'bg-red-600 hover:bg-red-500 text-white shadow-xs cursor-pointer active:scale-95'
+                            : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer active:scale-95'
+                        }`}
+                      >
+                        {isChecked ? 'Cochée ✓' : 'Cocher'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Bottom Tactical Synthesis Advice banner */}
+        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <Zap className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-extrabold text-white block">
+                Synthèse pour la Causerie du Match Retour :
+              </span>
+              <span className="text-slate-400">
+                {(scouting.caracteristiquesEquipe || []).length > 0
+                  ? `${(scouting.caracteristiquesEquipe || []).length} caractéristique(s) intégrée(s) au plan de jeu contre ${match.adversaire}.`
+                  : `Aucune caractéristique cochée. Prenez 1 minute pour cocher les traits dominants de ${match.adversaire}.`}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <span className="text-[11px] text-slate-500 font-semibold">
+              Sauvegarde automatique
+            </span>
+            <span className="text-emerald-400 font-black text-xs">✓ En direct</span>
+          </div>
+        </div>
+      </div>
+
       {/* MODAL D'ÉVALUATION DIRECTE DU JOUEUR ADVERSE (Clic sur pastille/icône joueur) */}
       {evaluatingPlayer && (
         <div
@@ -1270,9 +1791,17 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-12 h-12 rounded-2xl bg-gradient-to-b from-slate-800 to-slate-950 border-2 flex flex-col items-center justify-center shadow-lg ${
-                    NIVEAU_CONFIG[evaluatingPlayer.indication].borderRing
-                  }`}
+                  className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center shadow-lg ${
+                    evaluatingPlayer.indication === 'fort'
+                      ? 'bg-gradient-to-b from-emerald-800 via-emerald-950 to-slate-950 border-2 border-emerald-500 shadow-emerald-950/80'
+                      : evaluatingPlayer.indication === 'fort+'
+                      ? 'bg-gradient-to-b from-blue-800 via-blue-950 to-slate-950 border-2 border-blue-500 shadow-blue-950/70'
+                      : evaluatingPlayer.indication === 'faible +'
+                      ? 'bg-gradient-to-b from-red-900 via-red-950 to-slate-950 border-2 border-red-500 shadow-red-950/70'
+                      : evaluatingPlayer.indication === 'faible'
+                      ? 'bg-gradient-to-b from-orange-900 via-orange-950 to-slate-950 border-2 border-orange-500 shadow-orange-950/70'
+                      : 'bg-gradient-to-b from-slate-800 to-slate-950 border-2 border-yellow-500/50'
+                  } ${NIVEAU_CONFIG[evaluatingPlayer.indication].borderRing}`}
                 >
                   <span className="text-[9px] text-slate-400 font-bold uppercase">N°</span>
                   <span className="text-xl font-black text-white">{evaluatingPlayer.numero}</span>
@@ -1343,7 +1872,7 @@ export const PitchAdverseTactique: React.FC<PitchAdverseTactiqueProps> = ({
                         {lvl === 'faible +' && 'Rouge'}
                         {lvl === 'faible' && 'Orange'}
                         {lvl === 'moyen' && 'Jaune'}
-                        {lvl === 'fort' && 'Vert'}
+                        {lvl === 'fort' && 'Vert foncé'}
                         {lvl === 'fort+' && 'Bleu'}
                       </span>
                     </button>
